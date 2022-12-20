@@ -4,7 +4,7 @@ import pygame
 from colorama import Fore
 from gym import spaces
 from gym.envs.registration import register
-
+#
 not_on_board = np.array([-1, -1])
 
 # for internal use - converts the integer to the coordinates of the location
