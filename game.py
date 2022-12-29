@@ -2,7 +2,7 @@ import time
 
 import Gobblet_Gobblers_Env as gge
 import submission
-#
+
 # TODO - elaborate
 time_limit = 80
 steps_limit = 100
@@ -96,6 +96,6 @@ def play_tournament(agent_1_str, agent_2_str, num_of_games):
 
 
     print("ties: ", (score[0] / (num_of_games*2)) * 100, "% ", agent_1_str, "player1 wins: ", (score[1] / (num_of_games*2)) * 100,
-          "% ", agent_2_str, "player2 wins: ", (score[2] / (num_of_games*2)) * 100)
+          "% ", agent_2_str, "player2 wins: ", (score[2] / (num_of_games*2)) * 100, "% ")
 
     print("")
