@@ -418,55 +418,58 @@ def greedy_improved(curr_state, agent_id, time_limit):
 
 class RBMinimax:
     
-    def __init__(self, state, agent_id, depth, heuristic = smart_heuristic):
+    def __init__(self, state, agent_id, timeout, depth, action, heuristic = smart_heuristic):
         self.state = state
         self.agent_id = agent_id
-        self.heuristic = heuristic
-        self.best_action = (None, None) #(action, value)
-        self.depth = 0
+        self.timeout = timeout
         self.start_time = time.time()
+        self.depth = depth
+        self.actionToTheState = action
+        self.heuristic = heuristic
+        self.best_action = (None, None) #(action, value)        
         self.is_done_flag = False
      
     #neighbor[0] = action = (pawn, location())
     #neighbor[1] = next_state
-    def run_rb_minimax(self):
-        if gge.is_final_state(self.state) or self.depth == 0:
-            return self.heuristic(self.state, self.agent_id)
+    def run_rb_minimax(self):            
+        if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
+            return (self.actionToTheState, self.heuristic(self.state, self.agent_id))
         neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
-        max_heuristic = 0
         max_neighbor = None
         min_neighbor = None
         if self.state.turn == self.agent_id:
             max_heuristic = -math.inf
             for neighbor in neighbor_list:
-                curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.depth - 1, self.heuristic).run_rb_minimax()
+                action, curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, neighbor[0], self.heuristic).run_rb_minimax()
+                if self.is_done():
+                    return (self.actionToTheState, self.heuristic(self.state, self.agent_id))
                 if curr_heuristic >= max_heuristic:
                     max_heuristic = curr_heuristic
                     max_neighbor = neighbor
-            if(self.best_action == (None, None)):
-                self.best_action = (max_neighbor[0], max_heuristic)
-            elif(max_heuristic > self.best_action[1]):
-                self.best_action = (max_neighbor[0], max_heuristic)
-            return max_neighbor[0], max_heuristic
+                    self.best_action = action
+            return (max_neighbor[0], max_heuristic)
         else:#turn != self.state.get_turn()
             min_heuristic = math.inf
             for neighbor in neighbor_list:
-                curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.depth - 1, self.heuristic).run_rb_minimax()
-                if curr_heuristic <= max_heuristic:
+                action, curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, neighbor[0], self.heuristic).run_rb_minimax()
+                if curr_heuristic <= min_heuristic:
                     min_heuristic = curr_heuristic
                     min_neighbor = neighbor
-            if(self.best_action == (None, None)):
-                self.best_action = (min_neighbor[0], min_heuristic)
-            elif(min_heuristic < self.best_action[1]):
-                self.best_action = (min_neighbor[0], min_heuristic)
-            return min_neighbor[0], min_heuristic            
+                    self.best_action = action
+            return (min_neighbor[0], min_heuristic)           
         
-    def checkTime(self, time_limit):
+    def checkTime(self):
+        #print("check time")
         end_time = time.time()
-        if(end_time - (self.start_time - 0.2) > time_limit): #-0.2 to make sure we don't go over the time limit
+        if(end_time - self.start_time + 0.2 > self.timeout): #-0.2 to make sure we don't go over the time limit
             self.is_done_flag = True
-    
+        self.timeout -= (end_time - self.start_time)
+        #print(self.timeout)
+        if(self.timeout < end_time - self.start_time):
+            self.is_done_flag = True
+        
     def is_done(self):
+        self.checkTime()
         return self.is_done_flag
     
     def get_best_action(self):
@@ -474,16 +477,20 @@ class RBMinimax:
 
 #return tuple of (action, value)
 def rb_heuristic_min_max_aux(curr_state, agent_id, time_limit):
-    rb_minimax = RBMinimax(curr_state, agent_id, 0, smart_heuristic)
+    rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 0, (None, None), smart_heuristic)
     
     while not rb_minimax.is_done():
         rb_minimax.run_rb_minimax()
+        # print("depth: {}".format(rb_minimax.depth))
+        # print("timeout: {}".format(rb_minimax.timeout))
+        #print(rb_minimax.timeout)
         rb_minimax.depth += 1    
-        rb_minimax.checkTime(time_limit)
-    return rb_minimax.get_best_action()[0]
+    return rb_minimax.get_best_action()
     
 def rb_heuristic_min_max(curr_state, agent_id, time_limit):
-    return rb_heuristic_min_max_aux(curr_state, agent_id, time_limit)
+    action = rb_heuristic_min_max_aux(curr_state, agent_id, time_limit)
+    print("action: {}".format(action))
+    return action
 
 def alpha_beta(curr_state, agent_id, time_limit):
     
