@@ -1,8 +1,11 @@
+import math
 import random
 
 import numpy as np
 
 import Gobblet_Gobblers_Env as gge
+
+import time
 
 not_on_board = np.array([-1, -1])
 
@@ -397,9 +400,8 @@ def greedy(curr_state, agent_id, time_limit):
 #curr_state = the current board
 #neighbor_list = all possible states that are possible from this state
 #neighbor = (action = (pawn, location(), next_state)
+#to do - greedy_improved_aux
 def greedy_improved(curr_state, agent_id, time_limit):
-    #printMatrix(stateToMatrix(curr_state, agent_id))
-    #printMatrix(stateToMatrix(curr_state, (agent_id + 1) % 2))
     neighbor_list = curr_state.get_neighbors()
     max_heuristic = 0
     max_neighbor = None
@@ -414,11 +416,74 @@ def greedy_improved(curr_state, agent_id, time_limit):
         return max_neighbor[0]
     return max_neighbor
 
-
-def rb_heuristic_min_max(curr_state, agent_id, time_limit):
+class RBMinimax:
     
-    raise NotImplementedError()
+    def __init__(self, state, agent_id, depth, heuristic = smart_heuristic):
+        self.state = state
+        self.agent_id = agent_id
+        self.heuristic = heuristic
+        self.best_action = (None, None) #(action, value)
+        self.depth = 0
+        self.start_time = time.time()
+        self.is_done_flag = False
+     
+    #neighbor[0] = action = (pawn, location())
+    #neighbor[1] = next_state
+    def run_rb_minimax(self):
+        if gge.is_final_state(self.state) or self.depth == 0:
+            return self.heuristic(self.state, self.agent_id)
+        neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
+        max_heuristic = 0
+        max_neighbor = None
+        min_neighbor = None
+        if self.state.turn == self.agent_id:
+            max_heuristic = -math.inf
+            for neighbor in neighbor_list:
+                curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.depth - 1, self.heuristic).run_rb_minimax()
+                if curr_heuristic >= max_heuristic:
+                    max_heuristic = curr_heuristic
+                    max_neighbor = neighbor
+            if(self.best_action == (None, None)):
+                self.best_action = (max_neighbor[0], max_heuristic)
+            elif(max_heuristic > self.best_action[1]):
+                self.best_action = (max_neighbor[0], max_heuristic)
+            return max_neighbor[0], max_heuristic
+        else:#turn != self.state.get_turn()
+            min_heuristic = math.inf
+            for neighbor in neighbor_list:
+                curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.depth - 1, self.heuristic).run_rb_minimax()
+                if curr_heuristic <= max_heuristic:
+                    min_heuristic = curr_heuristic
+                    min_neighbor = neighbor
+            if(self.best_action == (None, None)):
+                self.best_action = (min_neighbor[0], min_heuristic)
+            elif(min_heuristic < self.best_action[1]):
+                self.best_action = (min_neighbor[0], min_heuristic)
+            return min_neighbor[0], min_heuristic            
+        
+    def checkTime(self, time_limit):
+        end_time = time.time()
+        if(end_time - (self.start_time - 0.2) > time_limit): #-0.2 to make sure we don't go over the time limit
+            self.is_done_flag = True
+    
+    def is_done(self):
+        return self.is_done_flag
+    
+    def get_best_action(self):
+        return self.best_action
 
+#return tuple of (action, value)
+def rb_heuristic_min_max_aux(curr_state, agent_id, time_limit):
+    rb_minimax = RBMinimax(curr_state, agent_id, 0, smart_heuristic)
+    
+    while not rb_minimax.is_done():
+        rb_minimax.run_rb_minimax()
+        rb_minimax.depth += 1    
+        rb_minimax.checkTime(time_limit)
+    return rb_minimax.get_best_action()[0]
+    
+def rb_heuristic_min_max(curr_state, agent_id, time_limit):
+    return rb_heuristic_min_max_aux(curr_state, agent_id, time_limit)
 
 def alpha_beta(curr_state, agent_id, time_limit):
     
