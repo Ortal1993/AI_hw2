@@ -9,6 +9,11 @@ import time
 
 not_on_board = np.array([-1, -1])
 
+def printMatrix(matrix):
+    print("     *******     ")
+    for i in range(0, 3):
+        print(" | ", matrix[i, 0], " | ", matrix[i, 1], " | ", matrix[i, 2], " | ")
+    print("     *******     ")
 
 # agent_id is which player I am, 0 - for the first player , 1 - if second player
 def dumb_heuristic1(state, agent_id):
@@ -43,388 +48,20 @@ def is_hidden(state, agent_id, pawn):
     return False
 
 
-# count the numbers of pawns that i have that aren't hidden
+# count the numbers of pawns that i have on the board that aren't hidden
 # player1_pawns = "B1": (not_on_board, "B")
 def dumb_heuristic2(state, agent_id):
     sum_pawns = 0
-    #print("dumb")
     if agent_id == 0:
         for key, value in state.player1_pawns.items():#key = pawn, value = (not_on_board, "B")
             if not np.array_equal(value[0], not_on_board) and not is_hidden(state, agent_id, key):
-                #print("here1")
                 sum_pawns += 1
     if agent_id == 1:
         for key, value in state.player2_pawns.items():
             if not np.array_equal(value[0], not_on_board) and not is_hidden(state, agent_id, key):
-                #print("here2")
                 sum_pawns += 1
 
-    #print(sum_pawns)
     return sum_pawns
-    
-#state = the next board if the action that called "smart_heuristic" would be applied
-def smart_heuristic(state, agent_id):
-    matrixOfCurrPlayer = stateToMatrix(state, agent_id)
-    matrixOfOpponent = stateToMatrix(state, (agent_id + 1) % 2)
-    
-    valueOfHeuristic = 0
-    if(definitelyWin(matrixOfCurrPlayer)):
-        valueOfHeuristic += 50
-    
-    #optionsToLoose = numOfOptionsToWin(matrixOfOpponent, matrixOfCurrPlayer)
-    valueOfHeuristic += blockWithBestPawn(matrixOfOpponent, matrixOfCurrPlayer, state, agent_id)
-    
-    numOfMovesCurr = numOfMoves(matrixOfCurrPlayer)
-    #printMatrix(matrixOfCurrPlayer)
-    numOfMovesOpponent = numOfMoves(matrixOfOpponent)
-    #printMatrix(matrixOfOpponent)
-    if((numOfMovesCurr == 1 and numOfMovesOpponent == 0) or (numOfMovesOpponent == 1 and numOfMovesCurr == 1)):
-        valueOfHeuristic += firstMove(matrixOfCurrPlayer, agent_id) 
-                
-    valueOfHeuristic += numOfOptionsToWin(matrixOfCurrPlayer, matrixOfOpponent, agent_id, state)
-    valueOfHeuristic -= numOfOptionsToWin(matrixOfOpponent, matrixOfCurrPlayer, agent_id, state)
-            
-    valueOfHeuristic += dumb_heuristic2(state, agent_id)
-    
-    return valueOfHeuristic
-
-
-"""
-Win: If the player has two in a row, they can place a third to get three in a row. - DONE
-Block: If the opponent has two in a row, the player must play the third themselves to block the opponent. - DONE
-Fork: Cause a scenario where the player has two ways to win (two non-blocked lines of 2).
-Blocking an opponent's fork: If there is only one possible fork for the opponent, the player should block it. Otherwise, the player should block 
-        all forks in any way that simultaneously allows them to make two in a row. Otherwise, the player should make a two in a row to force the 
-        opponent into defending, as long as it does not result in them producing a fork. For example, if "X" has two opposite corners and "O" has 
-        the center, "O" must not play a corner move to win. (Playing a corner move in this scenario produces a fork for "X" to win.)
-Center: A player marks the center. (If it is the first move of the game, playing a corner move gives the second player more opportunities to make a 
-        mistake and may therefore be the better choice; however, it makes no difference between perfect players.)
-Opposite corner: If the opponent is in the corner, the player plays the opposite corner.
-Empty corner: The player plays in a corner square.
-Empty side: The player plays in a middle square on any of the four sides.
-
-numOfExposedGobblinsOnBoard = dumb_heuristic2 - DONE
-"""
-
-#only visible pawns on board
-def stateToMatrix(curr_state, agent_id):
-    matrix = np.full((3, 3), " ")
-    if(agent_id == 0):
-        #print("player 0 mine")
-        for pawn_key in curr_state.player1_pawns.keys():
-            #print(curr_state.player1_pawns[pawn_key])
-            curr_location = gge.find_curr_location(curr_state, pawn_key, 0)
-            if(curr_location[0] == -1):
-                continue
-            if is_hidden(curr_state, agent_id, pawn_key):
-                continue
-            matrix[curr_location[0]][curr_location[1]] = pawn_key
-    
-    if(agent_id == 1):
-        #print("player 1 mine")
-        for pawn_key in curr_state.player2_pawns.keys():
-            #print(curr_state.player2_pawns[pawn_key])
-            curr_location = gge.find_curr_location(curr_state, pawn_key, 1)
-            if(curr_location[0] == -1):
-                continue
-            if is_hidden(curr_state, agent_id, pawn_key):
-                continue
-            matrix[curr_location[0]][curr_location[1]] = pawn_key
-            
-    return matrix
-
-#the num of exposed gobblins on board
-def numOfMoves(matrix):
-    numOfMoves = 0
-    for i in range(0, 3):
-        for j in range(0, 3):
-            if matrix[i][j] != " ":
-                numOfMoves += 1
-
-    return numOfMoves
-
-#counts the number of options to win. if there is more than one option to win, it is a better state than if there is only one option to win.
-def createMatrixOfWins(matrix, opponentMatrix, agent_id, state):
-    matrixOfWins = np.full((3, 3), 0)
-    
-    maxPawn = getMaximumPawn(agent_id, state)
-    
-    for i in range(3):
-        if (matrix[i][0] != " " and matrix[i][1] != " " and matrix[i][2] == " " and (gge.size_cmp(maxPawn, opponentMatrix[i][2]) or opponentMatrix[i][2] == " ")):
-                matrixOfWins[i][2] += 1
-        if (matrix[i][0] != " " and matrix[i][2] != " " and matrix[i][1] == " " and (gge.size_cmp(maxPawn, opponentMatrix[i][1]) or opponentMatrix[i][1] == " ")):
-                matrixOfWins[i][1] += 1
-        if (matrix[i][1] != " " and matrix[i][2] != " " and matrix[i][0] == " " and (gge.size_cmp(maxPawn, opponentMatrix[i][0]) or opponentMatrix[i][0] == " ")):
-                matrixOfWins[i][0] += 1
-            
-    # check columns
-    for j in range(3):
-        if (matrix[0][j] != " " and matrix[1][j] != " " and matrix[2][j] == " " and (gge.size_cmp(maxPawn, opponentMatrix[2][j]) or opponentMatrix[2][j] == " ")):
-                matrixOfWins[2][j] += 1
-        if (matrix[0][j] != " " and matrix[2][j] != " " and matrix[1][j] == " " and (gge.size_cmp(maxPawn, opponentMatrix[1][j]) or opponentMatrix[1][j] == " ")):
-                matrixOfWins[1][j] += 1
-        if (matrix[1][j] != " " and matrix[2][j] != " " and matrix[0][j] == " " and (gge.size_cmp(maxPawn, opponentMatrix[0][j]) or opponentMatrix[0][j] == " ")):
-                matrixOfWins[0][j] += 1
-
-    # check obliques
-    if (matrix[0][0] != " " and matrix[1][1] != " " and matrix[2][2] == " " and (gge.size_cmp(maxPawn, opponentMatrix[2][2]) or opponentMatrix[2][2] == " ")):
-            matrixOfWins[2][2] += 1
-    if (matrix[0][0] != " " and matrix[2][2] != " " and matrix[1][1] == " " and (gge.size_cmp(maxPawn, opponentMatrix[1][1]) or opponentMatrix[1][1] == " ")):
-            matrixOfWins[1][1] += 1
-    if (matrix[1][1] != " " and matrix[2][2] != " " and matrix[0][0] == " " and (gge.size_cmp(maxPawn, opponentMatrix[0][0]) or opponentMatrix[0][0] == " ")):
-            matrixOfWins[0][0] += 1
-            
-    if (matrix[0][2] != " " and matrix[1][1] != " " and matrix[2][0] == " " and (gge.size_cmp(maxPawn, opponentMatrix[2][0]) or opponentMatrix[2][0] == " ")):
-            matrixOfWins[2][0] += 1
-    if (matrix[1][1] != " " and matrix[2][0] != " " and matrix[0][2] == " " and (gge.size_cmp(maxPawn, opponentMatrix[0][2]) or opponentMatrix[0][2] == " ")):
-            matrixOfWins[0][2] += 1
-    if (matrix[0][2] != " " and matrix[2][0] != " " and matrix[1][1] == " " and (gge.size_cmp(maxPawn, opponentMatrix[1][1]) or opponentMatrix[1][1] == " ")):
-            matrixOfWins[1][1] += 1
-    
-    return matrixOfWins
-
-def numOfOptionsToWin(matrixOfCurrPlayer, matrixOfOpponent, agent_id, state):
-    matrixOfWins = createMatrixOfWins(matrixOfCurrPlayer, matrixOfOpponent, agent_id, state)
-    sum = 0
-    for i in range(0, 3):
-        for j in range(0, 3):
-            if (matrixOfWins[i][j] > 1):
-                sum *= 2
-            else:
-                sum += matrixOfWins[i][j]
-    return sum
-
-def printMatrix(matrix):
-    print("     *******     ")
-    for i in range(0, 3):
-        print(" | ", matrix[i, 0], " | ", matrix[i, 1], " | ", matrix[i, 2], " | ")
-    print("     *******     ")
-
-def firstMove(matrix, agent_id):
-    #print("first corner move")
-    #printMatrix(matrix)
-    num = 0
-    if agent_id == 0:
-        if matrix[0][0] == "S" or matrix[0][2] == "S" or matrix[2][2] == "S" or matrix[2][0] == "S":
-            num = 5
-        if matrix[0][0] == "M" or matrix[0][2] == "M" or matrix[2][2] == "M" or matrix[2][0] == "M":
-            num = 3
-        if matrix[0][0] == "B" or matrix[0][2] == "B" or matrix[2][2] == "B" or matrix[2][0] == "B":
-            num = 1
-        #print("firstMove. agent_1. num is: {}", num)
-    if agent_id == 1:
-        if matrix[1][1] == "S":
-            num = 5
-        if matrix[1][1] == "M":
-            num = 3
-        if matrix[1][1] == "B":
-            num = 1
-        #print("firstMove. agent_2. num is: {}", num)
-    return num
-
-#gives priority for a state in which we are definatlly going to win
-def definitelyWin(matrix):
-    #printMatrix(matrix)
-    for i in range(3):
-        if ((matrix[i][0] != " " and matrix[i][1] != " " and matrix[i][2] != " ")
-            or (matrix[i][0] != " " and matrix[i][2] != " " and matrix[i][1] != " ")
-            or (matrix[i][1] != " " and matrix[i][2] != " " and matrix[i][0] != " ")):
-                return True
-            
-    # check columns
-    for j in range(3):
-        if ((matrix[0][j] != " " and matrix[1][j] != " " and matrix[2][j] != " ")
-            or (matrix[0][j] != " " and matrix[2][j] != " " and matrix[1][j] != " ")
-            or (matrix[1][j] != " " and matrix[2][j] != " " and matrix[0][j] != " ")):
-                return True
-
-    # check main diagonal
-    if ((matrix[0][0] != " " and matrix[1][1] != " " and matrix[2][2] != " ")
-        or (matrix[0][0] != " " and matrix[2][2] != " " and matrix[1][1] != " ")
-        or (matrix[1][1] != " " and matrix[2][2] != " " and matrix[0][0] != " ")):
-            return True
-    
-    # check secondary diagonal        
-    if ((matrix[0][2] != " " and matrix[1][1] != " " and matrix[2][0] != " ")
-        or (matrix[1][1] != " " and matrix[2][0] != " " and matrix[0][2] != " ")
-        or (matrix[0][2] != " " and matrix[2][0] != " " and matrix[1][1] != " ")):
-            return True
-    
-    #no win    
-    return False
-
-def createMatrixOfBlocks(matrix, matrixOfCurrerntPlayer, agent_id, state):
-    matrixOfBlocks = np.full((3, 3), " ")
-    
-    maxPawn = getMaximumPawn(agent_id, state)
-        
-    for i in range(3):
-        if ((matrix[i][0] != " ") and
-            (matrix[i][1] != " ") and
-            (matrix[i][2] == " ") and
-            (gge.size_cmp(matrixOfCurrerntPlayer[i][2], maxPawn) != -1 or matrixOfCurrerntPlayer[i][2] == " ")):
-                matrixOfBlocks[i][2] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][0]) == 1:
-                    matrixOfBlocks[i][0] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][1]) == 1:
-                    matrixOfBlocks[i][1] = "X"
-        if (matrix[i][0] != " " and 
-            matrix[i][2] != " " and 
-            matrix[i][1] == " " and 
-            (gge.size_cmp(matrixOfCurrerntPlayer[i][1], maxPawn) != -1 or matrixOfCurrerntPlayer[i][1] == " ")):
-                matrixOfBlocks[i][1] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][0]) == 1:
-                    matrixOfBlocks[i][0] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][2]) == 1:
-                    matrixOfBlocks[i][2] = "X"
-        if (matrix[i][1] != " " and 
-            matrix[i][2] != " " and 
-            matrix[i][0] == " " and 
-            (gge.size_cmp(matrixOfCurrerntPlayer[i][0], maxPawn) != -1 or matrixOfCurrerntPlayer[i][0] == " ")):
-                matrixOfBlocks[i][0] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][1]) == 1:
-                    matrixOfBlocks[i][1] = "X"
-                if gge.size_cmp(maxPawn, matrix[i][2]) == 1:
-                     matrixOfBlocks[i][2] = "X"
-            
-    # check columns
-    for j in range(3):
-        if (matrix[0][j] != " " and 
-            matrix[1][j] != " " and 
-            matrix[2][j] == " " and 
-            (gge.size_cmp(matrixOfCurrerntPlayer[2][j], maxPawn) != -1 or matrixOfCurrerntPlayer[2][j] == " ")):
-                matrixOfBlocks[2][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[0][j]) == 1:
-                    matrixOfBlocks[0][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[1][j]) == 1:
-                    matrixOfBlocks[1][j] = "X"
-        if (matrix[0][j] != " " and 
-            matrix[2][j] != " " and 
-            matrix[1][j] == " " and 
-            (gge.size_cmp(matrixOfCurrerntPlayer[1][j], maxPawn) != -1 or matrixOfCurrerntPlayer[1][j] == " ")):
-                matrixOfBlocks[1][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[0][j]) == 1:
-                    matrixOfBlocks[0][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[2][j]) == 1:
-                    matrixOfBlocks[2][j] = "X"
-        if (matrix[1][j] != " " and 
-            matrix[2][j] != " " and 
-            matrix[0][j] == " " and 
-            (gge.size_cmp(matrixOfCurrerntPlayer[0][j], maxPawn) != -1 or matrixOfCurrerntPlayer[0][j] == " ")):
-                matrixOfBlocks[0][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[1][j]) == 1:
-                    matrixOfBlocks[1][j] = "X"
-                if gge.size_cmp(maxPawn, matrix[2][j]) == 1:
-                    matrixOfBlocks[2][j] = "X"
-
-    # check obliques
-    if (matrix[0][0] != " " and 
-        matrix[1][1] != " " and 
-        matrix[2][2] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[2][2], maxPawn) != -1 or matrixOfCurrerntPlayer[2][2] == " ")):
-            matrixOfBlocks[2][2] = "X"
-            if gge.size_cmp(maxPawn, matrix[0][0]) == 1:
-                    matrixOfBlocks[0][0] = "X"
-            if gge.size_cmp(maxPawn, matrix[1][1]) == 1:
-                matrixOfBlocks[1][1] = "X"
-    if (matrix[0][0] != " " and 
-        matrix[2][2] != " " and 
-        matrix[1][1] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[1][1], maxPawn) != -1 or matrixOfCurrerntPlayer[1][1] == " ")):
-            matrixOfBlocks[1][1] = "X"
-            if gge.size_cmp(maxPawn, matrix[0][0]) == 1:
-                    matrixOfBlocks[0][0] = "X"
-            if gge.size_cmp(maxPawn, matrix[2][2]) == 1:
-                matrixOfBlocks[2][2] = "X"
-    if (matrix[1][1] != " " and 
-        matrix[2][2] != " " and 
-        matrix[0][0] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[0][0], maxPawn) != -1 or matrixOfCurrerntPlayer[0][0] == " ")):
-            matrixOfBlocks[0][0] = "X"
-            if gge.size_cmp(maxPawn, matrix[1][1]) == 1:
-                    matrixOfBlocks[1][1] = "X"
-            if gge.size_cmp(maxPawn, matrix[2][2]) == 1:
-                matrixOfBlocks[2][2] = "X"
-            
-    if (matrix[0][2] != " " and 
-        matrix[1][1] != " " and 
-        matrix[2][0] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[2][0], maxPawn) != -1 or matrixOfCurrerntPlayer[2][0] == " ")):
-            matrixOfBlocks[2][0] = "X"
-            if gge.size_cmp(maxPawn, matrix[0][2]) == 1:
-                    matrixOfBlocks[0][2] = "X"
-            if gge.size_cmp(maxPawn, matrix[1][1]) == 1:
-                matrixOfBlocks[1][1] = "X"
-    if (matrix[1][1] != " " and 
-        matrix[2][0] != " " and 
-        matrix[0][2] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[0][2], maxPawn) != -1 or matrixOfCurrerntPlayer[0][2] == " ")):
-            matrixOfBlocks[0][2] = "X"
-            if gge.size_cmp(maxPawn, matrix[1][1]) == 1:
-                    matrixOfBlocks[1][1] = "X"
-            if gge.size_cmp(maxPawn, matrix[2][0]) == 1:
-                matrixOfBlocks[2][0] = "X"
-    if (matrix[0][2] != " " and 
-        matrix[2][0] != " " and 
-        matrix[1][1] == " " and 
-        (gge.size_cmp(matrixOfCurrerntPlayer[1][1], maxPawn) != -1 or matrixOfCurrerntPlayer[1][1] == " ")):
-            matrixOfBlocks[1][1] = "X"
-            if gge.size_cmp(maxPawn, matrix[0][2]) == 1:
-                    matrixOfBlocks[0][2] = "X"
-            if gge.size_cmp(maxPawn, matrix[2][0]) == 1:
-                matrixOfBlocks[2][0] = "X"
-    
-    return matrixOfBlocks
-       
-#put the best pawn from the available one (not on board and not hidden) in consider of what the opponent has
-#deals only with one loose option
-def blockWithBestPawn(matrixOfOpponent, matrixOfCurrPlayer, state, curr_agent_id):
-    matrixOfBlocks = createMatrixOfBlocks(matrixOfOpponent, matrixOfCurrPlayer, curr_agent_id, state)
-    
-    maxPawn = "S"
-    blocks = 0
-    for i in range(3):
-        for j in range(3):
-            if(matrixOfBlocks[i][j] == "X" and matrixOfCurrPlayer[i][j] != " "):
-                #print(matrixOfBlocks[i][j])
-                #print(matrixOfCurrPlayer[i][j])
-                blocks += 1
-                #print("\nmatrices")
-                #printMatrix(matrixOfBlocks)
-                #printMatrix(matrixOfCurrPlayer)
-                if(gge.size_cmp(matrixOfCurrPlayer[i][j], maxPawn)):
-                    maxPawn = matrixOfCurrPlayer[i][j]
-    
-    if blocks == 0:
-        return 0   
-        
-    maxOpponentPawn = getMaximumPawn(curr_agent_id, state)
-        
-    if maxPawn == maxOpponentPawn:#maxOpponentPawn is equal to maxPawn
-        return 40
-    if maxPawn == "S": #maxOpponentPawn is "M" or "B"
-        return 10
-    if maxPawn == "B": #maxOpponentPawn is "M"
-        return 40
-    if maxOpponentPawn == "S": #maxPawn is "M"
-        return 30
-    else:
-        return -1
-
-def getMaximumPawn(agent_id, state):
-    pawns = {"B": 0, "M": 0, "S": 0}
-    
-    if(agent_id == 1):
-        for key, value in state.player1_pawns.items():#key = pawn, value = (not_on_board, "B")
-            if np.array_equal(value[0], not_on_board):
-                pawns[value[1]] += 1
-    if(agent_id == 2):
-        for key, value in state.player2_pawns.items():
-            if np.array_equal(value[0], not_on_board):
-                pawns[value[1]] += 1   
-
-    maxPawn = max(pawns, key=pawns.get)
-    return maxPawn
 
 # IMPLEMENTED FOR YOU - NO NEED TO CHANGE
 def human_agent(curr_state, agent_id, time_limit):
@@ -445,7 +82,6 @@ def random_agent(curr_state, agent_id, time_limit):
     rnd = random.randint(0, neighbor_list.__len__() - 1)
     return neighbor_list[rnd][0]
 
-
 # TODO - instead of action to return check how to raise not_implemented
 #neighbor_list = all possible states that are possible from this state
 #neighbor = (action = (pawn, i), next_state)
@@ -460,18 +96,350 @@ def greedy(curr_state, agent_id, time_limit):
             max_neighbor = neighbor
     return max_neighbor[0]
 
+#valuesCurrState = dictionary of situations for the current state
+#valuesNextState = dictionary of situations for the next state
+#the agent_id is the opponent
+#pawn, location of the next state
 
-# TODO - add your code here
+#curr_state = the current board before doing the action
+#agent_id = the agent_id of the curr_state
+#next_state = the board after doing the action, the board that we want to evaluate
+#next_agent_id = the next_agent_id of the next_state
+# def smart_heuristic_aux(currState, agent_id, next_state, next_agent_id, pawn, location):    
+#     valuesCurrState = smart_heuristic(currState, agent_id)
+#     valuesNextState = smart_heuristic(next_state, next_agent_id)    
+#     heuristic = calculateHeuristic(valuesCurrState, agent_id, valuesNextState, next_agent_id, pawn, location)
+#     # if (valuesNextState[next_agent_id]["potentialWins"] < valuesCurrState[next_agent_id]["potentialWins"]): #means that we blocked the opponent
+#     #     heuristic += blockWithBestPawn(pawn, location)
+#     return heuristic
+
+#convert a state to a matrix of exposed pawns on board of a specific player
+def stateToMatrix(curr_state, agent_id):
+    matrix = np.full((3, 3), " ")
+    if(agent_id == 0):
+        for pawn_key in curr_state.player1_pawns.keys():
+            curr_location = gge.find_curr_location(curr_state, pawn_key, 0)
+            if(curr_location[0] == -1):
+                continue
+            if is_hidden(curr_state, agent_id, pawn_key):
+                continue
+            matrix[curr_location[0]][curr_location[1]] = pawn_key
+    
+    if(agent_id == 1):
+        for pawn_key in curr_state.player2_pawns.keys():
+            curr_location = gge.find_curr_location(curr_state, pawn_key, 1)
+            if(curr_location[0] == -1):
+                continue
+            if is_hidden(curr_state, agent_id, pawn_key):
+                continue
+            matrix[curr_location[0]][curr_location[1]] = pawn_key
+            
+    return matrix
+
+#gives priority for a state in which we are definatlly going to win
+def definitelyWin(matrix):
+    for i in range(3):
+        if(matrix[i][0] != " " and matrix[i][1] != " " and matrix[i][2] != " "):
+            return 1
+            
+    # check columns
+    for j in range(3):
+        if (matrix[0][j] != " " and matrix[1][j] != " " and matrix[2][j] != " "):
+            return 1
+
+    # check main diagonal
+    if (matrix[0][0] != " " and matrix[1][1] != " " and matrix[2][2] != " "):
+        return 1
+    
+    # check secondary diagonal        
+    if (matrix[0][2] != " " and matrix[1][1] != " " and matrix[2][0] != " "):
+            return 1
+    
+    #no win    
+    return 0
+
+def evaluatePotentialWins(matrixCurrPlayer, matrixOpponent, agent_id, state):
+    availablePawns = getAvailablePawns(agent_id, state)
+    availablePawnsOpponent = getAvailablePawns((agent_id + 1) % 2, state)
+    matrixOfPotentialWins = createMatrixOfPotentialWins(matrixCurrPlayer, matrixOpponent, availablePawns, availablePawnsOpponent)
+    sum = 0
+    for i in range(0, 3):
+        for j in range(0, 3):
+            sum += matrixOfPotentialWins[i][j]
+    return sum
+
+#get not hidden pawns
+#return dictionary of kind of pawn and the number of unhidden pawns from that kind
+def getAvailablePawns(agent_id, state):
+    pawns = {"B": 2, "M": 2, "S": 2}
+    
+    if(agent_id == 0):
+        for key, value in state.player1_pawns.items():#key = pawn, value = (not_on_board, "B")
+            if is_hidden(state, agent_id, value[1]):
+                pawns[value[1]] -= 1
+    if(agent_id == 1):
+        for key, value in state.player2_pawns.items():
+            if is_hidden(state, agent_id, value[1]):
+                pawns[value[1]] -= 1   
+            
+    return pawns
+
+class SPOTS:
+    ROW = 0
+    COL = 1
+    MAIN_DIAGONAL = 2
+    SECONDARY_DIAGONAL = 3
+
+#counts the number of options to win in 2 steps. if there is more than one option to win
+def createMatrixOfPotentialWins(matrixCurrPlayer, matrixOpponent, availablePawns, availablePawnsOpponent):
+    matrixOfWins = np.full((3, 3), 0)
+    # print("here")
+    # print(availablePawns)
+    # print(availablePawnsOpponent)
+    # print("***") 
+    # printMatrix(matrixCurrPlayer)
+    # print("$")
+    # printMatrix(matrixOpponent)
+    # check rows
+    row, col = -1, -1
+    for i in range(3):
+        row, col = checkIthRow(matrixCurrPlayer, i)
+        if row != -1 and col != -1:
+            matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.ROW, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
+    
+    # check columns
+    row, col = -1, -1
+    for i in range(3):
+        row, col = checkIthCol(matrixCurrPlayer, i)
+        if row != -1 and col != -1:
+            val = evaluateRemainingSpot(availablePawns, SPOTS.COL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
+            matrixOfWins[row][col] += val
+            
+    # check diagonals
+    row, col = -1, -1
+    row, col = checkMainDiagonal(matrixCurrPlayer)
+    if row != -1 and col != -1:
+        matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.MAIN_DIAGONAL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
+        
+    row, col = -1, -1
+    row, col = checkSecondaryDiagonal(matrixCurrPlayer)
+    if row != -1 and col != -1:
+        # print("here")
+        # print(row, col)
+        matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.SECONDARY_DIAGONAL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
+    
+    return matrixOfWins
+
+def checkIthRow(matrixCurrPlayer, row):
+    # print("checkithrow")
+    # printMatrix(matrixCurrPlayer)
+    colomns = [0, 1, 2]
+    for col in range(3):
+        if matrixCurrPlayer[row][col] != " " and col in colomns:
+            colomns.remove(col)
+    if len(colomns) == 1:#only 1 spot is empty
+        # print(row, colomns[0])
+        return row, colomns[0]
+    else:
+        return -1, -1
+    
+def checkIthCol(matrixCurrPlayer, col):
+    # print("checkithcol")
+    # printMatrix(matrixCurrPlayer)
+    rows = [0, 1, 2]
+    for row in range(3):
+        if matrixCurrPlayer[row][col] != " " and row in rows:
+            rows.remove(row)
+    if len(rows) == 1:#only 1 spot is empty
+        # print(rows[0], col)
+        return rows[0], col
+    else:
+        return -1, -1
+    
+def checkMainDiagonal(matrixCurrPlayer):
+    # print("checkdiagonal")
+    # printMatrix(matrixCurrPlayer)
+    options = [0, 1, 2]
+    for i in range(3):
+        if matrixCurrPlayer[i][i] != " " and i in options:
+            options.remove(i)
+    if len(options) == 1:#only 1 spot is empty
+        # print(options[0], options[0])
+        return options[0], options[0]
+    else:
+        return -1, -1
+
+def checkSecondaryDiagonal(matrixCurrPlayer):
+    # print("checksecondary")
+    # printMatrix(matrixCurrPlayer)
+    options = [(0, 2), (1, 1), (2, 0)]
+    if matrixCurrPlayer[0][2] != " ":
+        options.remove((0, 2))        
+    if matrixCurrPlayer[1][1] != " ":
+        options.remove((1, 1))        
+    if matrixCurrPlayer[2][0] != " ":
+        options.remove((2, 0))
+    if len(options) == 1:#only 1 spot is empty
+        # print(options[0][0], options[0][1])
+        return options[0][0], options[0][1]
+    else:
+        return -1, -1
+    
+#paws is a dictionary    
+def getMaxPawn(pawns):
+    maxPawn = 'S'
+    if(pawns['B'] > 0):
+        maxPawn = 'B'
+    elif(pawns['M'] > 0):
+        maxPawn = 'M'
+    else:
+        maxPawn = 'S'
+    return maxPawn    
+    
+#check if the remaining spot is empty or if it is smaller than the max pawn of the current player    
+def evaluateRemainingSpot(availablePawns, typeOfSpot, row, col, matrixCurrPlayer, matrixOpponent, availableOpponentPawns):
+    maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)
+    availablePawns = getAvailablePawnsToBlock(availablePawns, typeOfSpot, row, col, matrixCurrPlayer)
+    maxAavailableMaxPawn = getMaxPawn(availablePawns)
+    # print("type of spot: {}".format(typeOfSpot))
+    # print(availablePawns)
+    # print(availableOpponentPawns)
+    # print("MAX Pawns {}".format(maxAavailableMaxPawn))
+    # print("MAX OPPONENT Block: {}".format(maxAvailableOpponentPawnForBlocking))
+    # print(matrixOpponent[row][col])
+    # print("***")
+    value = 0
+    if matrixOpponent[row][col] == " " or gge.size_cmp(maxAavailableMaxPawn, matrixOpponent[row][col]):
+        if maxAavailableMaxPawn == maxAvailableOpponentPawnForBlocking:#availableMaxPawn is equal to availableMaxPawnOpponent - can block the opponent, must put the max pawn
+            value = 100
+        if maxAavailableMaxPawn == "S": #availableMaxPawnOpponent is "M" or "B" - can't block the opponent but worth the try
+            value = 10
+        if maxAavailableMaxPawn == "B": #availableMaxPawnOpponent is "M" - can block the opponent
+            value = 150
+        if maxAvailableOpponentPawnForBlocking == "S": #availableMaxPawn is "M" - can block the opponent
+            value = 50
+        else:
+            return value
+    else:
+        return value #the remaining spot is not empty or it is equal to the pawn of the opponent in that spot  
+    
+#remove pawns that are on the same row/col/diagonal that brings to win
+def getAvailablePawnsToBlock(pawns, typeOfSpot, row, col, matrixCurrPlayer):
+    if typeOfSpot == SPOTS.ROW:
+        for i in range(3):
+            if matrixCurrPlayer[row][i] != " ":
+                pawns[matrixCurrPlayer[row][i]] -= 1
+    elif typeOfSpot == SPOTS.COL:
+        for i in range(3):
+            if matrixCurrPlayer[i][col] != " ":
+                pawns[matrixCurrPlayer[i][col]] -= 1
+    elif typeOfSpot == SPOTS.MAIN_DIAGONAL:
+        
+        for i in range(3):
+            if matrixCurrPlayer[i][i] != " ":
+                pawns[matrixCurrPlayer[i][i]] -= 1
+    else:
+        if matrixCurrPlayer[0][2] != " ":
+            pawns[matrixCurrPlayer[0][2]] -= 1
+        if matrixCurrPlayer[1][1] != " ":
+            pawns[matrixCurrPlayer[1][1]] -= 1       
+        if matrixCurrPlayer[2][0] != " ":
+            pawns[matrixCurrPlayer[2][0]] -= 1
+    #print(pawns)
+    return pawns
+
+def cornerMove(matrixCurrPlayer):
+    cornereMoves = [[0,0], [0,2], [2,0], [2,2]]
+    num = 0
+    for location in cornereMoves:
+        if matrixCurrPlayer[location[0], location[1]] == "S":
+            num = 1
+        if matrixCurrPlayer[location[0], location[1]] == "M":
+            num = 3
+        if matrixCurrPlayer[location[0], location[1]] == "B":
+            num = 5
+    return num    
+
+def centerMove(matrixCurrPlayer):
+    num = 0
+    if matrixCurrPlayer[1, 1] == "S":
+        num = 1
+    if matrixCurrPlayer[1, 1] == "M":
+        num = 3
+    if matrixCurrPlayer[1, 1] == "B":
+        num = 5
+    return num
+
+def edgeMove(matrixCurrPlayer):
+    edgeMoves = [[0,1], [1,0], [1,2], [2,1]]
+    num = 0
+    for location in edgeMoves:
+        if matrixCurrPlayer[location[0], location[1]] == "S":
+            num = 1
+        if matrixCurrPlayer[location[0], location[1]] == "M":
+            num = 3
+        if matrixCurrPlayer[location[0], location[1]] == "B":
+            num = 5
+    return num    
+
+def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_id):
+    heuristic = 0
+    heuristic += valuesState[agent_id]["wins"] * 1000 #each win is worth 1000 points
+    heuristic -= valuesState[opponent_agent_id]["wins"] * 1000 #each win of the opponent is less 1000 points
+    
+    heuristic += valuesState[agent_id]["potentialWins"]
+    heuristic -= valuesState[opponent_agent_id]["potentialWins"]
+    
+    heuristic += valuesState[agent_id]["exposedPawns"] #need to consider the kind of pawn?
+    heuristic -= valuesState[opponent_agent_id]["exposedPawns"] #need to consider the kind of pawn?   
+    
+    if(valuesState[agent_id]["exposedPawns"] == 1 and valuesState[opponent_agent_id]["exposedPawns"] == 0):
+        # print("first move of player 1")
+        # print(valuesState)
+        heuristic += cornerMove(matrixCurrPlayer)
+    elif(valuesState[agent_id]["exposedPawns"] == 1 and valuesState[opponent_agent_id]["exposedPawns"] == 1):
+        # print("first move of player 2")
+        # print(valuesState)
+        heuristic += centerMove(matrixCurrPlayer)
+    else:
+        #heuristic += oppositeCornerMove(matrixCurrPlayer)
+        heuristic += cornerMove(matrixCurrPlayer)
+        heuristic += centerMove(matrixCurrPlayer)
+        heuristic += edgeMove(matrixCurrPlayer)    
+    return heuristic
+
+#returns dictionary of values [win, num of potential wins in one step, num of exposed pawns] for each player for a given state
+#potential wins - number of ways to win in one step
+def smart_heuristic(state, agent_id):
+    opponent_agent_id = (agent_id + 1) % 2
+    
+    matrixCurrPlayer = stateToMatrix(state, agent_id)
+    matrixOpponent = stateToMatrix(state, opponent_agent_id)
+    
+    values = {}
+    values[agent_id] = {"wins": 0, "potentialWins": 0, "exposedPawns": 0}
+    values[opponent_agent_id] = {"wins": 0, "potentialWins": 0, "exposedPawns": 0}
+    
+    values[agent_id]["wins"] = definitelyWin(matrixCurrPlayer)
+    values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent, agent_id, state)
+    values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)
+    
+    values[opponent_agent_id]["wins"] = definitelyWin(matrixOpponent)
+    values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer, agent_id, state)
+    values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
+    
+    return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
+
 #curr_state = the current board
 #neighbor_list = all possible states that are possible from this state
 #neighbor = (action = (pawn, location(), next_state)
-#to do - greedy_improved_aux
 def greedy_improved(curr_state, agent_id, time_limit):
-    neighbor_list = curr_state.get_neighbors()
     max_heuristic = 0
     max_neighbor = None
+    neighbor_list = curr_state.get_neighbors()
     for neighbor in neighbor_list:
-        curr_heuristic = smart_heuristic(neighbor[1], agent_id)
+        next_state = neighbor[1]
+        curr_heuristic = smart_heuristic(next_state, agent_id)
         #print("pawn: {}, location: {}, heuristic: {}, next location:{}".format(neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], agent_id)))
         if curr_heuristic >= max_heuristic:
             max_heuristic = curr_heuristic
@@ -511,10 +479,10 @@ class RBMinimax:
                 # if (not gge.is_legal_step(action, self.state)):
                 #     continue
                 if self.is_done():
-                    return self.best_max_action_value
+                    return self.best_max_action_value #TO DO - check if to return this or the action from last iteration
                 if curr_heuristic >= self.best_max_action_value[1]:
                     #print("max, depth: {}, pawn: {}, location: {}, heuristic: {}, next location:{}".format(self.depth, neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], self.agent_id)))
-                    self.best_max_action_value = (neighbor[0], curr_heuristic)
+                    self.best_max_action_value = (neighbor[0], curr_heuristic) 
                 if(self.alpha != None and self.beta != None):
                     self.alpha = max(self.alpha, self.best_max_action_value[1])
                     if(self.best_max_action_value[1] >= self.beta):
@@ -527,7 +495,7 @@ class RBMinimax:
                 # if (not gge.is_legal_step(action, self.state)):
                 #     continue
                 if self.is_done():
-                    return self.best_min_action_value                
+                    return self.best_min_action_value #TO DO - check if to return this or the action from last iteration               
                 if curr_heuristic <= self.best_min_action_value[1]:
                     #print("min, depth: {}, pawn: {}, location: {}, heuristic: {}, next location:{}".format(self.depth, neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], self.agent_id)))
                     self.best_min_action_value = (neighbor[0], curr_heuristic)
@@ -554,7 +522,7 @@ class RBMinimax:
 
 def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = None):
     rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 1, None, alpha, beta)
-    while not rb_minimax.is_done():
+    while not rb_minimax.is_done():#TO DO -check the alpha beta values in each iteration
         rb_minimax.run_rb_minimax()
         # print(rb_minimax.best_max_action_value)
         # print(rb_minimax.best_min_action_value)
@@ -572,9 +540,7 @@ def rb_heuristic_min_max(curr_state, agent_id, time_limit):
 def alpha_beta(curr_state, agent_id, time_limit):
     action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
     return action
-
   
-
 class RB_Expectimax:
     
     def __init__(self, state, agent_id, timeout, depth, actionToThisState, heuristic = smart_heuristic):
@@ -593,6 +559,7 @@ class RB_Expectimax:
     #neighbor[1] = next_state
     def run_rb_expectimax(self):            
         if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
+            
             return (self.actionToThisState, self.heuristic(self.state, self.agent_id))
         
         neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
@@ -689,5 +656,5 @@ def expectimax(curr_state, agent_id, time_limit):
 
 # these is the BONUS - not mandatory
 def super_agent(curr_state, agent_id, time_limit):
-    
-    raise NotImplementedError()
+    action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
+    return action
