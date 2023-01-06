@@ -9,12 +9,6 @@ import time
 
 not_on_board = np.array([-1, -1])
 
-def printMatrix(matrix):
-    print("     *******     ")
-    for i in range(0, 3):
-        print(" | ", matrix[i, 0], " | ", matrix[i, 1], " | ", matrix[i, 2], " | ")
-    print("     *******     ")
-
 # agent_id is which player I am, 0 - for the first player , 1 - if second player
 def dumb_heuristic1(state, agent_id):
     is_final = gge.is_final_state(state)
@@ -35,7 +29,6 @@ def dumb_heuristic1(state, agent_id):
         # if other player won
         return -1
 
-
 # checks if a pawn is under another pawn
 def is_hidden(state, agent_id, pawn):
     pawn_location = gge.find_curr_location(state, pawn, agent_id)
@@ -46,7 +39,6 @@ def is_hidden(state, agent_id, pawn):
         if np.array_equal(value[0], pawn_location) and gge.size_cmp(value[1], state.player1_pawns[pawn][1]) == 1:
             return True
     return False
-
 
 # count the numbers of pawns that i have on the board that aren't hidden
 # player1_pawns = "B1": (not_on_board, "B")
@@ -96,22 +88,11 @@ def greedy(curr_state, agent_id, time_limit):
             max_neighbor = neighbor
     return max_neighbor[0]
 
-#valuesCurrState = dictionary of situations for the current state
-#valuesNextState = dictionary of situations for the next state
-#the agent_id is the opponent
-#pawn, location of the next state
-
-#curr_state = the current board before doing the action
-#agent_id = the agent_id of the curr_state
-#next_state = the board after doing the action, the board that we want to evaluate
-#next_agent_id = the next_agent_id of the next_state
-# def smart_heuristic_aux(currState, agent_id, next_state, next_agent_id, pawn, location):    
-#     valuesCurrState = smart_heuristic(currState, agent_id)
-#     valuesNextState = smart_heuristic(next_state, next_agent_id)    
-#     heuristic = calculateHeuristic(valuesCurrState, agent_id, valuesNextState, next_agent_id, pawn, location)
-#     # if (valuesNextState[next_agent_id]["potentialWins"] < valuesCurrState[next_agent_id]["potentialWins"]): #means that we blocked the opponent
-#     #     heuristic += blockWithBestPawn(pawn, location)
-#     return heuristic
+def printMatrix(matrix):
+    print("     *******     ")
+    for i in range(0, 3):
+        print(" | ", matrix[i, 0], " | ", matrix[i, 1], " | ", matrix[i, 2], " | ")
+    print("     *******     ")
 
 #convert a state to a matrix of exposed pawns on board of a specific player
 def stateToMatrix(curr_state, agent_id):
@@ -158,29 +139,146 @@ def definitelyWin(matrix):
     #no win    
     return 0
 
-def evaluatePotentialWins(matrixCurrPlayer, matrixOpponent, agent_id, state):
-    availablePawns = getAvailablePawns(agent_id, state)
-    availablePawnsOpponent = getAvailablePawns((agent_id + 1) % 2, state)
-    matrixOfPotentialWins = createMatrixOfPotentialWins(matrixCurrPlayer, matrixOpponent, availablePawns, availablePawnsOpponent)
-    sum = 0
-    for i in range(0, 3):
-        for j in range(0, 3):
-            sum += matrixOfPotentialWins[i][j]
-    return sum
+#potential win - winning after the opponent makes a move
+def evaluatePotentialWins(matrixCurrPlayer, matrixOpponent):
+    matrixOfPotentialBlocks = createMatrixOfPotentialBlocks(matrixCurrPlayer)
+    
+    availablePawns = getAvailablePawnsToBlock(matrixOfPotentialBlocks, matrixCurrPlayer)
+    maxAvailablePawn = getMaxPawn(availablePawns)#in order to know if he would be able to put a pawn on maxAavailablePawn
 
+    availableOpponentPawns = getAvailablePawnsToBlock(matrixOfPotentialBlocks, matrixOpponent)
+    maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)
+    
+    matrixOfPotentialWins = createMatrixOfPotentialWins(matrixCurrPlayer)
+    return evaluateRemainingSpots(matrixOpponent, matrixOfPotentialWins, maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
+
+def createMatrixOfPotentialWins(matrixCurrPlayer):
+    matrixOfWins = np.full((3, 3), 0)
+    row, col = -1, -1
+    for i in range(3):
+        row, col = checkIthRowForWin(matrixCurrPlayer, i)
+        if row != -1 and col != -1:
+            matrixOfWins[row][col] = 1
+    
+    # check columns
+    row, col = -1, -1
+    for i in range(3):
+        row, col = checkIthColForWin(matrixCurrPlayer, i)
+        if row != -1 and col != -1:
+            matrixOfWins[row][col] = 1
+            
+    # check diagonals
+    row, col = -1, -1
+    row, col = checkMainDiagonalForWin(matrixCurrPlayer)
+    if row != -1 and col != -1:
+        matrixOfWins[row][col] = 1
+        
+    row, col = -1, -1
+    row, col = checkSecondaryDiagonalForWin(matrixCurrPlayer)
+    if row != -1 and col != -1:
+        matrixOfWins[row][col] = 1
+    
+    return matrixOfWins
+
+def checkIthRowForWin(matrixCurrPlayer, row):
+    colomns = [0, 1, 2]
+    for col in range(3):
+        if matrixCurrPlayer[row][col] != " " and col in colomns:
+            colomns.remove(col)
+    if len(colomns) == 1:#only 1 spot is empty
+        return row, colomns[0]
+    else:
+        return -1, -1
+    
+def checkIthColForWin(matrixCurrPlayer, col):
+    rows = [0, 1, 2]
+    for row in range(3):
+        if matrixCurrPlayer[row][col] != " " and row in rows:
+            rows.remove(row)
+    if len(rows) == 1:#only 1 spot is empty
+        return rows[0], col
+    else:
+        return -1, -1
+    
+def checkMainDiagonalForWin(matrixCurrPlayer):
+    options = [0, 1, 2]
+    for i in range(3):
+        if matrixCurrPlayer[i][i] != " " and i in options:
+            options.remove(i)
+    if len(options) == 1:#only 1 spot is empty
+        return options[0], options[0]
+    else:
+        return -1, -1
+
+def checkSecondaryDiagonalForWin(matrixCurrPlayer):
+    options = [(0, 2), (1, 1), (2, 0)]
+    if matrixCurrPlayer[0][2] != " ":
+        options.remove((0, 2))        
+    if matrixCurrPlayer[1][1] != " ":
+        options.remove((1, 1))        
+    if matrixCurrPlayer[2][0] != " ":
+        options.remove((2, 0))
+    if len(options) == 1:#only 1 spot is empty
+        return options[0][0], options[0][1]
+    else:
+        return -1, -1
+    
+def evaluateRemainingSpots(matrixOpponent, matrixOfWins, maxAvailablePawn, maxAvailableOpponentPawnForBlocking):
+    value = 0
+    for i in range(3):
+        for j in range(3):          
+            if matrixOfWins[i][j] == 1 and (matrixOpponent[i][j] == " " or gge.size_cmp(maxAvailablePawn, matrixOpponent[i][j])):
+                value += evaluateSpot(maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
+    return value    
+
+def createMatrixOfPotentialBlocks(matrixOpponent):
+    matrixOfBlocks = np.full((3, 3), 0)    
+    for i in range(3):
+        row = checkIthRow(matrixOpponent, i)
+        if row != -1:#need to check all options to block in the i_th row
+            for i in range(3):
+                matrixOfBlocks[row][i] = 1
+    
+    # check columns
+    for i in range(3):
+        col = checkIthCol(matrixOpponent, i)
+        if col != -1:#need to check all option to block in the i_th colomn
+            for i in range(3):
+                matrixOfBlocks[i][col] = 1
+            
+    # check diagonals
+    mainDiagonal = checkMainDiagonal(matrixOpponent)
+    if mainDiagonal != -1:#need to check all option to block in the main diagonal
+        for i in range(3):
+            matrixOfBlocks[i][i] = 1
+           
+    secondaryDiagonal = checkSecondaryDiagonal(matrixOpponent)
+    if secondaryDiagonal != -1: #need to check all option to block in the secondary diagonal
+        for i in range(3):
+            matrixOfBlocks[i][2-i] = 1
+    
+    return matrixOfBlocks
+
+def evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer):
+    matrixOfPotentialBlocks = createMatrixOfPotentialBlocks(matrixOpponent)
+                    
+    availableOpponentPawns = getAvailablePawnsToBlock(matrixOfPotentialBlocks, matrixOpponent)
+    maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)#in order to know if he would be able to put a pawn on maxAavailablePawn
+        
+    return evaluateBlocks(matrixCurrPlayer, matrixOfPotentialBlocks, maxAvailableOpponentPawnForBlocking)
+            
 #get not hidden pawns
 #return dictionary of kind of pawn and the number of unhidden pawns from that kind
-def getAvailablePawns(agent_id, state):
+def getAvailablePawns(state, agent_id):
     pawns = {"B": 2, "M": 2, "S": 2}
-    
     if(agent_id == 0):
         for key, value in state.player1_pawns.items():#key = pawn, value = (not_on_board, "B")
-            if is_hidden(state, agent_id, value[1]):
+            if is_hidden(state, agent_id, key):
                 pawns[value[1]] -= 1
     if(agent_id == 1):
         for key, value in state.player2_pawns.items():
-            if is_hidden(state, agent_id, value[1]):
-                pawns[value[1]] -= 1   
+            if is_hidden(state, agent_id, key):
+                pawns[value[1]] -= 1
             
     return pawns
 
@@ -190,100 +288,48 @@ class SPOTS:
     MAIN_DIAGONAL = 2
     SECONDARY_DIAGONAL = 3
 
-#counts the number of options to win in 2 steps. if there is more than one option to win
-def createMatrixOfPotentialWins(matrixCurrPlayer, matrixOpponent, availablePawns, availablePawnsOpponent):
-    matrixOfWins = np.full((3, 3), 0)
-    # print("here")
-    # print(availablePawns)
-    # print(availablePawnsOpponent)
-    # print("***") 
-    # printMatrix(matrixCurrPlayer)
-    # print("$")
-    # printMatrix(matrixOpponent)
-    # check rows
-    row, col = -1, -1
-    for i in range(3):
-        row, col = checkIthRow(matrixCurrPlayer, i)
-        if row != -1 and col != -1:
-            matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.ROW, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
-    
-    # check columns
-    row, col = -1, -1
-    for i in range(3):
-        row, col = checkIthCol(matrixCurrPlayer, i)
-        if row != -1 and col != -1:
-            val = evaluateRemainingSpot(availablePawns, SPOTS.COL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
-            matrixOfWins[row][col] += val
-            
-    # check diagonals
-    row, col = -1, -1
-    row, col = checkMainDiagonal(matrixCurrPlayer)
-    if row != -1 and col != -1:
-        matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.MAIN_DIAGONAL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
-        
-    row, col = -1, -1
-    row, col = checkSecondaryDiagonal(matrixCurrPlayer)
-    if row != -1 and col != -1:
-        # print("here")
-        # print(row, col)
-        matrixOfWins[row][col] += evaluateRemainingSpot(availablePawns, SPOTS.SECONDARY_DIAGONAL, row, col, matrixCurrPlayer, matrixOpponent, availablePawnsOpponent)
-    
-    return matrixOfWins
-
-def checkIthRow(matrixCurrPlayer, row):
-    # print("checkithrow")
-    # printMatrix(matrixCurrPlayer)
+def checkIthRow(matrixOpponent, row):
     colomns = [0, 1, 2]
     for col in range(3):
-        if matrixCurrPlayer[row][col] != " " and col in colomns:
+        if matrixOpponent[row][col] != " " and col in colomns:
             colomns.remove(col)
     if len(colomns) == 1:#only 1 spot is empty
-        # print(row, colomns[0])
-        return row, colomns[0]
+        return row
     else:
-        return -1, -1
+        return -1
     
-def checkIthCol(matrixCurrPlayer, col):
-    # print("checkithcol")
-    # printMatrix(matrixCurrPlayer)
+def checkIthCol(matrixOpponent, col):
     rows = [0, 1, 2]
     for row in range(3):
-        if matrixCurrPlayer[row][col] != " " and row in rows:
+        if matrixOpponent[row][col] != " " and row in rows:
             rows.remove(row)
     if len(rows) == 1:#only 1 spot is empty
-        # print(rows[0], col)
-        return rows[0], col
+        return col
     else:
-        return -1, -1
+        return -1
     
-def checkMainDiagonal(matrixCurrPlayer):
-    # print("checkdiagonal")
-    # printMatrix(matrixCurrPlayer)
+def checkMainDiagonal(matrixOpponent):
     options = [0, 1, 2]
     for i in range(3):
-        if matrixCurrPlayer[i][i] != " " and i in options:
+        if matrixOpponent[i][i] != " " and i in options:
             options.remove(i)
     if len(options) == 1:#only 1 spot is empty
-        # print(options[0], options[0])
-        return options[0], options[0]
+        return options[0]
     else:
-        return -1, -1
+        return -1
 
-def checkSecondaryDiagonal(matrixCurrPlayer):
-    # print("checksecondary")
-    # printMatrix(matrixCurrPlayer)
+def checkSecondaryDiagonal(matrixOpponent):
     options = [(0, 2), (1, 1), (2, 0)]
-    if matrixCurrPlayer[0][2] != " ":
+    if matrixOpponent[0][2] != " ":
         options.remove((0, 2))        
-    if matrixCurrPlayer[1][1] != " ":
+    if matrixOpponent[1][1] != " ":
         options.remove((1, 1))        
-    if matrixCurrPlayer[2][0] != " ":
+    if matrixOpponent[2][0] != " ":
         options.remove((2, 0))
     if len(options) == 1:#only 1 spot is empty
-        # print(options[0][0], options[0][1])
-        return options[0][0], options[0][1]
+        return options[0][0]
     else:
-        return -1, -1
+        return -1
     
 #paws is a dictionary    
 def getMaxPawn(pawns):
@@ -295,57 +341,38 @@ def getMaxPawn(pawns):
     else:
         maxPawn = 'S'
     return maxPawn    
-    
-#check if the remaining spot is empty or if it is smaller than the max pawn of the current player    
-def evaluateRemainingSpot(availablePawns, typeOfSpot, row, col, matrixCurrPlayer, matrixOpponent, availableOpponentPawns):
-    maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)
-    availablePawns = getAvailablePawnsToBlock(availablePawns, typeOfSpot, row, col, matrixCurrPlayer)
-    maxAavailableMaxPawn = getMaxPawn(availablePawns)
-    # print("type of spot: {}".format(typeOfSpot))
-    # print(availablePawns)
-    # print(availableOpponentPawns)
-    # print("MAX Pawns {}".format(maxAavailableMaxPawn))
-    # print("MAX OPPONENT Block: {}".format(maxAvailableOpponentPawnForBlocking))
-    # print(matrixOpponent[row][col])
-    # print("***")
+  
+def evaluateSpot(currPawn, maxAvailableOpponentPawn):
     value = 0
-    if matrixOpponent[row][col] == " " or gge.size_cmp(maxAavailableMaxPawn, matrixOpponent[row][col]):
-        if maxAavailableMaxPawn == maxAvailableOpponentPawnForBlocking:#availableMaxPawn is equal to availableMaxPawnOpponent - can block the opponent, must put the max pawn
-            value = 100
-        if maxAavailableMaxPawn == "S": #availableMaxPawnOpponent is "M" or "B" - can't block the opponent but worth the try
-            value = 10
-        if maxAavailableMaxPawn == "B": #availableMaxPawnOpponent is "M" - can block the opponent
-            value = 150
-        if maxAvailableOpponentPawnForBlocking == "S": #availableMaxPawn is "M" - can block the opponent
-            value = 50
-        else:
-            return value
-    else:
-        return value #the remaining spot is not empty or it is equal to the pawn of the opponent in that spot  
+    if currPawn == maxAvailableOpponentPawn:#availableMaxPawn is equal to availableMaxPawnOpponent - can block the opponent, must put the max pawn
+        value = 150
+    elif currPawn == "S": #availableMaxPawnOpponent is "M" or "B" - can't block the opponent but worth the try
+        value = 10
+    elif currPawn == "B": #availableMaxPawnOpponent is "M" - can block the opponent
+        value = 100
+    elif maxAvailableOpponentPawn == "S": #availableMaxPawn is "M" - can block the opponent
+        value = 100
+    return value
+  
+#check if the remaining spot is empty or if it is smaller than the max pawn of the current player    
+def evaluateBlocks(matrixCurrPlayer, matrixOfBlocks, maxAvailableOpponentPawnForBlocking):
+    value = 0
+    for i in range(3):
+        for j in range(3):          
+            if matrixCurrPlayer[i][j] != " " and matrixOfBlocks[i][j] == 1:
+                value += evaluateSpot(matrixCurrPlayer[i][j], maxAvailableOpponentPawnForBlocking)                    
+    
+    return value  
     
 #remove pawns that are on the same row/col/diagonal that brings to win
-def getAvailablePawnsToBlock(pawns, typeOfSpot, row, col, matrixCurrPlayer):
-    if typeOfSpot == SPOTS.ROW:
-        for i in range(3):
-            if matrixCurrPlayer[row][i] != " ":
-                pawns[matrixCurrPlayer[row][i]] -= 1
-    elif typeOfSpot == SPOTS.COL:
-        for i in range(3):
-            if matrixCurrPlayer[i][col] != " ":
-                pawns[matrixCurrPlayer[i][col]] -= 1
-    elif typeOfSpot == SPOTS.MAIN_DIAGONAL:
-        
-        for i in range(3):
-            if matrixCurrPlayer[i][i] != " ":
-                pawns[matrixCurrPlayer[i][i]] -= 1
-    else:
-        if matrixCurrPlayer[0][2] != " ":
-            pawns[matrixCurrPlayer[0][2]] -= 1
-        if matrixCurrPlayer[1][1] != " ":
-            pawns[matrixCurrPlayer[1][1]] -= 1       
-        if matrixCurrPlayer[2][0] != " ":
-            pawns[matrixCurrPlayer[2][0]] -= 1
-    #print(pawns)
+#matrixCurrPlayer is the matrix of the current player of pawns that are not hidden
+def getAvailablePawnsToBlock(matrix, matrixOpponent):
+    pawns = {"B": 2, "M": 2, "S": 2}
+    for i in range(3):
+        for j in range(3):
+            if matrix[i][j] == 1 and matrixOpponent[i][j] != " ":
+                pawns[matrixOpponent[i][j]] -= 1  
+    
     return pawns
 
 def cornerMove(matrixCurrPlayer):
@@ -353,11 +380,11 @@ def cornerMove(matrixCurrPlayer):
     num = 0
     for location in cornereMoves:
         if matrixCurrPlayer[location[0], location[1]] == "S":
-            num = 1
+            num += 1
         if matrixCurrPlayer[location[0], location[1]] == "M":
-            num = 3
+            num += 3
         if matrixCurrPlayer[location[0], location[1]] == "B":
-            num = 5
+            num += 5
     return num    
 
 def centerMove(matrixCurrPlayer):
@@ -370,6 +397,7 @@ def centerMove(matrixCurrPlayer):
         num = 5
     return num
 
+#did not use it in the end
 def edgeMove(matrixCurrPlayer):
     edgeMoves = [[0,1], [1,0], [1,2], [2,1]]
     num = 0
@@ -384,28 +412,24 @@ def edgeMove(matrixCurrPlayer):
 
 def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_id):
     heuristic = 0
+    
     heuristic += valuesState[agent_id]["wins"] * 1000 #each win is worth 1000 points
     heuristic -= valuesState[opponent_agent_id]["wins"] * 1000 #each win of the opponent is less 1000 points
     
+    heuristic += valuesState[agent_id]["potentialBlocks"]
+    heuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
+    
     heuristic += valuesState[agent_id]["potentialWins"]
-    heuristic -= valuesState[opponent_agent_id]["potentialWins"]
+    heuristic -= valuesState[opponent_agent_id]["potentialWins"]    
     
     heuristic += valuesState[agent_id]["exposedPawns"] #need to consider the kind of pawn?
-    heuristic -= valuesState[opponent_agent_id]["exposedPawns"] #need to consider the kind of pawn?   
+    heuristic -= valuesState[opponent_agent_id]["exposedPawns"] #need to consider the kind of pawn?
     
     if(valuesState[agent_id]["exposedPawns"] == 1 and valuesState[opponent_agent_id]["exposedPawns"] == 0):
-        # print("first move of player 1")
-        # print(valuesState)
         heuristic += cornerMove(matrixCurrPlayer)
     elif(valuesState[agent_id]["exposedPawns"] == 1 and valuesState[opponent_agent_id]["exposedPawns"] == 1):
-        # print("first move of player 2")
-        # print(valuesState)
         heuristic += centerMove(matrixCurrPlayer)
-    else:
-        #heuristic += oppositeCornerMove(matrixCurrPlayer)
-        heuristic += cornerMove(matrixCurrPlayer)
-        heuristic += centerMove(matrixCurrPlayer)
-        heuristic += edgeMove(matrixCurrPlayer)    
+    
     return heuristic
 
 #returns dictionary of values [win, num of potential wins in one step, num of exposed pawns] for each player for a given state
@@ -417,20 +441,21 @@ def smart_heuristic(state, agent_id):
     matrixOpponent = stateToMatrix(state, opponent_agent_id)
     
     values = {}
-    values[agent_id] = {"wins": 0, "potentialWins": 0, "exposedPawns": 0}
-    values[opponent_agent_id] = {"wins": 0, "potentialWins": 0, "exposedPawns": 0}
+    values[agent_id] = {"wins": 0, "potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
+    values[opponent_agent_id] = {"wins": 0, "potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
     
     values[agent_id]["wins"] = definitelyWin(matrixCurrPlayer)
-    values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent, agent_id, state)
+    values[agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer)
+    values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent)#in 2 steps
     values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)
     
     values[opponent_agent_id]["wins"] = definitelyWin(matrixOpponent)
-    values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer, agent_id, state)
+    values[opponent_agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent)
+    values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer)#in 2 steps
     values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
     
     return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
 
-#curr_state = the current board
 #neighbor_list = all possible states that are possible from this state
 #neighbor = (action = (pawn, location(), next_state)
 def greedy_improved(curr_state, agent_id, time_limit):
@@ -440,7 +465,6 @@ def greedy_improved(curr_state, agent_id, time_limit):
     for neighbor in neighbor_list:
         next_state = neighbor[1]
         curr_heuristic = smart_heuristic(next_state, agent_id)
-        #print("pawn: {}, location: {}, heuristic: {}, next location:{}".format(neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], agent_id)))
         if curr_heuristic >= max_heuristic:
             max_heuristic = curr_heuristic
             max_neighbor = neighbor
@@ -449,6 +473,7 @@ def greedy_improved(curr_state, agent_id, time_limit):
         return max_neighbor[0]
     return max_neighbor
 
+##########################################class RBMinimax###################################################
 class RBMinimax:
     
     def __init__(self, state, agent_id, timeout, depth, actionToThisState, alpha, beta, heuristic = smart_heuristic):
@@ -460,50 +485,62 @@ class RBMinimax:
         self.alpha = alpha
         self.beta = beta
         self.heuristic = heuristic
-        self.best_max_action_value = (None, -math.inf) #((pawn, location), value)
-        self.best_min_action_value = (None, math.inf) #((pawn, location), value)
+        
+        self.best_action = None #((pawn, location), depth, value)
+        self.best_value = -math.inf #((pawn, location), depth, value)
+        
         self.start_time = time.time()
         self.is_done_flag = False
      
-    #neighbor[0] = action = (pawn, location())
-    #neighbor[1] = next_state
     def run_rb_minimax(self):            
         if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
             return (self.actionToThisState, self.heuristic(self.state, self.agent_id))
          
         neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
         if self.state.turn == self.agent_id:
+            curr_max = -math.inf            
             for neighbor in neighbor_list:
-                action, curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   neighbor[0], self.alpha, self.beta, self.heuristic).run_rb_minimax()
-                # if (not gge.is_legal_step(action, self.state)):
-                #     continue
+                actionToNextState = neighbor[0]
+                next_state = neighbor[1]
+                                
+                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
+                                                   actionToNextState, self.alpha, self.beta).run_rb_minimax()
+                if action != None and not gge.is_legal_step(action, self.state):
+                    continue
+                
                 if self.is_done():
-                    return self.best_max_action_value #TO DO - check if to return this or the action from last iteration
-                if curr_heuristic >= self.best_max_action_value[1]:
-                    #print("max, depth: {}, pawn: {}, location: {}, heuristic: {}, next location:{}".format(self.depth, neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], self.agent_id)))
-                    self.best_max_action_value = (neighbor[0], curr_heuristic) 
+                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                
+                if curr_heuristic > curr_max:
+                    curr_max = curr_heuristic                        
+                    self.best_action = action
+                    self.best_value = curr_max
                 if(self.alpha != None and self.beta != None):
-                    self.alpha = max(self.alpha, self.best_max_action_value[1])
-                    if(self.best_max_action_value[1] >= self.beta):
+                    self.alpha = max(self.alpha, curr_max)
+                    if(curr_max >= self.beta):
                         return (self.actionToThisState, math.inf)
-            return self.best_max_action_value
+            
+            return self.best_action, self.best_value
         else:#turn != self.state.turn
+            curr_min = math.inf
             for neighbor in neighbor_list:
-                action, curr_heuristic = RBMinimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   neighbor[0], self.alpha, self.beta, self.heuristic).run_rb_minimax()
-                # if (not gge.is_legal_step(action, self.state)):
-                #     continue
+                actionToNextState = neighbor[0]
+                next_state = neighbor[1]
+                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
+                                                   actionToNextState, self.alpha, self.beta).run_rb_minimax()
+                if action != None and not gge.is_legal_step(action, self.state):
+                    continue
                 if self.is_done():
-                    return self.best_min_action_value #TO DO - check if to return this or the action from last iteration               
-                if curr_heuristic <= self.best_min_action_value[1]:
-                    #print("min, depth: {}, pawn: {}, location: {}, heuristic: {}, next location:{}".format(self.depth, neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], self.agent_id)))
-                    self.best_min_action_value = (neighbor[0], curr_heuristic)
+                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                if curr_heuristic < curr_min:
+                    curr_min = curr_heuristic                        
+                    self.best_action = action
+                    self.best_value = curr_min
                 if(self.alpha != None and self.beta != None):
-                    self.beta = min(self.beta, self.best_min_action_value[1])
-                    if(self.best_min_action_value[1] <= self.alpha):
+                    self.beta = min(self.beta, curr_min)
+                    if(curr_min <= self.alpha):
                         return (self.actionToThisState, -math.inf)
-            return self.best_min_action_value          
+            return self.best_action, self.best_value         
         
     def checkTime(self):
         end_time = time.time()
@@ -518,29 +555,27 @@ class RBMinimax:
         return self.is_done_flag
     
     def get_best_action(self):
-        return self.best_max_action_value[0]
+        return self.best_action
+############################################################################################################
 
 def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = None):
-    rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 1, None, alpha, beta)
+    rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 0, None, alpha, beta)
     while not rb_minimax.is_done():#TO DO -check the alpha beta values in each iteration
         rb_minimax.run_rb_minimax()
-        # print(rb_minimax.best_max_action_value)
-        # print(rb_minimax.best_min_action_value)
-        # print(rb_minimax.depth)
+        print(rb_minimax.best_action, rb_minimax.best_value)
+        print(rb_minimax.depth)            
         rb_minimax.depth += 1
-    #print(rb_minimax.get_best_action())
     return rb_minimax.get_best_action()
     
 def rb_heuristic_min_max(curr_state, agent_id, time_limit):
-    #print(agent_id)
-    #print(curr_state.turn)
     action = alpha_beta_minimax(curr_state, agent_id, time_limit)
     return action
 
 def alpha_beta(curr_state, agent_id, time_limit):
     action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
     return action
-  
+
+############################################################################################################  
 class RB_Expectimax:
     
     def __init__(self, state, agent_id, timeout, depth, actionToThisState, heuristic = smart_heuristic):
@@ -550,50 +585,65 @@ class RB_Expectimax:
         self.depth = depth
         self.actionToThisState = actionToThisState
         self.heuristic = heuristic
-        self.best_max_action_value = (None, -math.inf) #((pawn, location), value)
-        self.best_probability_action_value = (None, 0) #((pawn, location), value)
+        
+        self.best_action = None #((pawn, location), depth, value)
+        self.best_value = -math.inf #((pawn, location), depth, value)
+        
         self.start_time = time.time()
         self.is_done_flag = False
      
-    #neighbor[0] = action = (pawn, location())
-    #neighbor[1] = next_state
     def run_rb_expectimax(self):            
         if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
-            
-            return (self.actionToThisState, self.heuristic(self.state, self.agent_id))
+            return self.actionToThisState, self.heuristic(self.state, self.agent_id) #TO DO - check if to return this or the action from last iteration
         
         neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
         if self.state.turn == self.agent_id:
+            curr_max = -math.inf            
             for neighbor in neighbor_list:
-                action, curr_heuristic = RB_Expectimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   neighbor[0], self.heuristic).run_rb_expectimax()
-                # if (not gge.is_legal_step(action, self.state)):
-                #     continue
+                actionToNextState = neighbor[0]
+                next_state = neighbor[1]
+                action, curr_heuristic = RB_Expectimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
+                                                              self.depth - 1, actionToNextState, self.heuristic).run_rb_expectimax()
+                if action != None and not gge.is_legal_step(action, self.state):
+                    continue
+                
                 if self.is_done():
-                    return self.best_max_action_value
-                if curr_heuristic >= self.best_max_action_value[1]:
-                    self.best_max_action_value = (neighbor[0], curr_heuristic)
-            return self.best_max_action_value
+                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+
+                if curr_heuristic > curr_max:
+                    curr_max = curr_heuristic                        
+                    self.best_action = action
+                    self.best_value = curr_max
+                
+            return self.best_action, self.best_value
         else:#turn != self.state.turn
-            utilities = []
+            heuristics = []
             probabilities = []
             for neighbor in neighbor_list:
-                action, curr_utility = RB_Expectimax(neighbor[1], self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   neighbor[0], self.heuristic).run_rb_expectimax()
-                utilities.append(curr_utility)
-                probabilities.append(self.probabilityOfState(self.state, neighbor[1], self.agent_id))
+                actionToNextState = neighbor[0]
+                next_state = neighbor[1]
+                action, curr_heuristic = RB_Expectimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
+                                                            self.depth - 1, actionToNextState, self.heuristic).run_rb_expectimax()
+                if action != None and not gge.is_legal_step(action, self.state):
+                    continue
+                
                 if self.is_done():
-                    return self.best_probability_action_value                        
+                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                
+                heuristics.append(curr_heuristic)
+                probabilities.append(self.probabilityOfState(self.state, next_state, self.agent_id))
+            
             #after we have all the utilities and probabilities
             sumOfProbabilities = 0
             for probability in probabilities:
                 sumOfProbabilities += probability #sumOfProbabilities is at least in the length of neighbor_list                            
-            chance = 0
-            for probability, curr_utility in zip(probabilities, utilities):
-                chance += probability/sumOfProbabilities * curr_utility
-                
-            self.best_probability_action_value = (self.state, chance)                
-            return self.best_probability_action_value
+            value = 0
+            for probability, curr_heuristic in zip(probabilities, heuristics):
+                value += probability/sumOfProbabilities * curr_heuristic
+            
+            self.best_action = self.actionToThisState
+            self.best_value = value           
+            return self.best_action, self.best_value
         
     def checkTime(self):
         end_time = time.time()
@@ -608,9 +658,9 @@ class RB_Expectimax:
         return self.is_done_flag
     
     def get_best_action(self):
-        return self.best_max_action_value[0]
+        return self.best_action
     
-    def probabilityOfState(self, curr_state, next_state, agent_id):
+    def probabilityOfState(self, curr_state, next_state, agent_id):    
         probability = 1
         if(self.pawnOnPawn(curr_state, next_state, agent_id) or self.smallPawnMove(curr_state, next_state, agent_id)):
             probability = 2
@@ -646,12 +696,16 @@ class RB_Expectimax:
                     return 1                        
                                 
         return 0 #no pawn is on pawn 
+############################################################################################################
 
 def expectimax(curr_state, agent_id, time_limit):
-    rb_expectimax = RB_Expectimax(curr_state, agent_id, time_limit, 1, None)
+    rb_expectimax = RB_Expectimax(curr_state, agent_id, time_limit, 0, None)
     while not rb_expectimax.is_done():
         rb_expectimax.run_rb_expectimax()
+        print(rb_expectimax.best_action, rb_expectimax.best_value)
+        print(rb_expectimax.depth)
         rb_expectimax.depth += 1
+        
     return rb_expectimax.get_best_action()
 
 # these is the BONUS - not mandatory
