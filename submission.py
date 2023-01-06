@@ -88,6 +88,65 @@ def greedy(curr_state, agent_id, time_limit):
             max_neighbor = neighbor
     return max_neighbor[0]
 
+#neighbor_list = all possible states that are possible from this state
+#neighbor = (action = (pawn, location(), next_state)
+def greedy_improved(curr_state, agent_id, time_limit):
+    max_heuristic = 0
+    max_neighbor = None
+    neighbor_list = curr_state.get_neighbors()
+    for neighbor in neighbor_list:
+        next_state = neighbor[1]
+        curr_heuristic = smart_heuristic(next_state, agent_id)
+        if curr_heuristic >= max_heuristic:
+            max_heuristic = curr_heuristic
+            max_neighbor = neighbor
+    
+    if max_neighbor != None:
+        return max_neighbor[0]
+    return max_neighbor
+
+def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = None):
+    rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 0, None, alpha, beta)
+    max_action, max_value = None, -math.inf
+    action, value = None, -math.inf
+    while not rb_minimax.is_done():
+        try:
+            action, value = rb_minimax.run_rb_minimax()
+            max_action = action
+            max_value = value
+            rb_minimax.depth += 1
+        except Exception as e:
+            rb_minimax.is_done_flag = True        
+    return max_action
+    
+def rb_heuristic_min_max(curr_state, agent_id, time_limit):
+    action = alpha_beta_minimax(curr_state, agent_id, time_limit)
+    return action
+
+def alpha_beta(curr_state, agent_id, time_limit):
+    action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
+    return action
+
+def expectimax(curr_state, agent_id, time_limit):
+    rb_expectimax = RB_Expectimax(curr_state, agent_id, time_limit, 0, None)
+    max_action, max_value = None, -math.inf
+    action, value = None, -math.inf
+    while not rb_expectimax.is_done():
+        try:
+            action, value = rb_expectimax.run_rb_expectimax()
+            max_action = action
+            max_value = value
+            rb_expectimax.depth += 1 
+        except Exception:
+            rb_expectimax.is_done_flag = True
+    return max_action
+
+# these is the BONUS - not mandatory
+def super_agent(curr_state, agent_id, time_limit):
+    action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
+    return action
+
+
 def printMatrix(matrix):
     print("     *******     ")
     for i in range(0, 3):
@@ -413,9 +472,6 @@ def edgeMove(matrixCurrPlayer):
 def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_id):
     heuristic = 0
     
-    heuristic += valuesState[agent_id]["wins"] * 1000 #each win is worth 1000 points
-    heuristic -= valuesState[opponent_agent_id]["wins"] * 1000 #each win of the opponent is less 1000 points
-    
     heuristic += valuesState[agent_id]["potentialBlocks"]
     heuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
     
@@ -435,43 +491,31 @@ def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_i
 #returns dictionary of values [win, num of potential wins in one step, num of exposed pawns] for each player for a given state
 #potential wins - number of ways to win in one step
 def smart_heuristic(state, agent_id):
-    opponent_agent_id = (agent_id + 1) % 2
-    
-    matrixCurrPlayer = stateToMatrix(state, agent_id)
-    matrixOpponent = stateToMatrix(state, opponent_agent_id)
-    
-    values = {}
-    values[agent_id] = {"wins": 0, "potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
-    values[opponent_agent_id] = {"wins": 0, "potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
-    
-    values[agent_id]["wins"] = definitelyWin(matrixCurrPlayer)
-    values[agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer)
-    values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent)#in 2 steps
-    values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)
-    
-    values[opponent_agent_id]["wins"] = definitelyWin(matrixOpponent)
-    values[opponent_agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent)
-    values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer)#in 2 steps
-    values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
-    
-    return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
+    winner = gge.is_final_state(state)
+    if winner == 0:
+        return 0
+    elif winner != None and int(winner) - 1 == agent_id:
+        return 1000
+    elif  winner != None and int(winner) - 1 != agent_id:
+        return -1000
+    else:
+        opponent_agent_id = (agent_id + 1) % 2
 
-#neighbor_list = all possible states that are possible from this state
-#neighbor = (action = (pawn, location(), next_state)
-def greedy_improved(curr_state, agent_id, time_limit):
-    max_heuristic = 0
-    max_neighbor = None
-    neighbor_list = curr_state.get_neighbors()
-    for neighbor in neighbor_list:
-        next_state = neighbor[1]
-        curr_heuristic = smart_heuristic(next_state, agent_id)
-        if curr_heuristic >= max_heuristic:
-            max_heuristic = curr_heuristic
-            max_neighbor = neighbor
-    
-    if max_neighbor != None:
-        return max_neighbor[0]
-    return max_neighbor
+        matrixCurrPlayer = stateToMatrix(state, agent_id)
+        matrixOpponent = stateToMatrix(state, opponent_agent_id)
+
+        values = {}
+        values[agent_id] = {"potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
+        values[opponent_agent_id] = {"potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
+
+        values[agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer)
+        values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent)#in 2 steps
+        values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)   
+        values[opponent_agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent)
+        values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer)#in 2 steps
+        values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
+
+        return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
 
 ##########################################class RBMinimax###################################################
 class RBMinimax:
@@ -484,96 +528,72 @@ class RBMinimax:
         self.actionToThisState = actionToThisState
         self.alpha = alpha
         self.beta = beta
-        self.heuristic = heuristic
-        
-        self.best_action = None #((pawn, location), depth, value)
-        self.best_value = -math.inf #((pawn, location), depth, value)
-        
+        self.heuristic = heuristic        
         self.start_time = time.time()
         self.is_done_flag = False
      
     def run_rb_minimax(self):            
-        if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
-            return (self.actionToThisState, self.heuristic(self.state, self.agent_id))
+        if self.is_done():
+           raise Exception("timeout") 
+        if gge.is_final_state(self.state) or self.depth == 0:
+            return (self.actionToThisState, self.heuristic(self.state, self.agent_id) + self.depth) # + self.depth to make sure that the agent will choose the shortest path to win
          
-        neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
+        neighbor_list = self.state.get_neighbors()
         if self.state.turn == self.agent_id:
-            curr_max = -math.inf            
+            curr_max = -math.inf
+            action_max = None            
             for neighbor in neighbor_list:
                 actionToNextState = neighbor[0]
-                next_state = neighbor[1]
-                                
-                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   actionToNextState, self.alpha, self.beta).run_rb_minimax()
-                if action != None and not gge.is_legal_step(action, self.state):
-                    continue
+                next_state = neighbor[1]                                
+                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
+                                                   self.depth - 1, actionToNextState, self.alpha, self.beta).run_rb_minimax()
                 
                 if self.is_done():
-                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                    raise Exception("timeout")
                 
                 if curr_heuristic > curr_max:
                     curr_max = curr_heuristic                        
-                    self.best_action = action
-                    self.best_value = curr_max
+                    action_max = actionToNextState
                 if(self.alpha != None and self.beta != None):
                     self.alpha = max(self.alpha, curr_max)
                     if(curr_max >= self.beta):
                         return (self.actionToThisState, math.inf)
             
-            return self.best_action, self.best_value
+            return action_max, curr_max
         else:#turn != self.state.turn
             curr_min = math.inf
+            action_min = None
             for neighbor in neighbor_list:
                 actionToNextState = neighbor[0]
                 next_state = neighbor[1]
-                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), self.depth - 1, 
-                                                   actionToNextState, self.alpha, self.beta).run_rb_minimax()
-                if action != None and not gge.is_legal_step(action, self.state):
-                    continue
+                action, curr_heuristic = RBMinimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
+                                                   self.depth - 1, actionToNextState, self.alpha, self.beta).run_rb_minimax()
+                
                 if self.is_done():
-                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                    raise Exception("timeout")
+                
                 if curr_heuristic < curr_min:
                     curr_min = curr_heuristic                        
-                    self.best_action = action
-                    self.best_value = curr_min
+                    action_min = actionToNextState
                 if(self.alpha != None and self.beta != None):
                     self.beta = min(self.beta, curr_min)
                     if(curr_min <= self.alpha):
                         return (self.actionToThisState, -math.inf)
-            return self.best_action, self.best_value         
+            return action_min, curr_min         
         
     def checkTime(self):
         end_time = time.time()
-        if(end_time - self.start_time + 0.2 > self.timeout): #-0.2 to make sure we don't go over the time limit
+        duration = end_time - self.start_time
+        if(duration + 0.2 > self.timeout):
             self.is_done_flag = True
-        self.timeout -= (end_time - self.start_time)
-        if(self.timeout < end_time - self.start_time):
+        self.timeout -= duration
+        if(self.timeout < duration):
             self.is_done_flag = True
         
     def is_done(self):
         self.checkTime()
         return self.is_done_flag
     
-    def get_best_action(self):
-        return self.best_action
-############################################################################################################
-
-def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = None):
-    rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 0, None, alpha, beta)
-    while not rb_minimax.is_done():#TO DO -check the alpha beta values in each iteration
-        rb_minimax.run_rb_minimax()
-        print(rb_minimax.best_action, rb_minimax.best_value)
-        print(rb_minimax.depth)            
-        rb_minimax.depth += 1
-    return rb_minimax.get_best_action()
-    
-def rb_heuristic_min_max(curr_state, agent_id, time_limit):
-    action = alpha_beta_minimax(curr_state, agent_id, time_limit)
-    return action
-
-def alpha_beta(curr_state, agent_id, time_limit):
-    action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
-    return action
 
 ############################################################################################################  
 class RB_Expectimax:
@@ -585,80 +605,71 @@ class RB_Expectimax:
         self.depth = depth
         self.actionToThisState = actionToThisState
         self.heuristic = heuristic
-        
-        self.best_action = None #((pawn, location), depth, value)
-        self.best_value = -math.inf #((pawn, location), depth, value)
-        
         self.start_time = time.time()
         self.is_done_flag = False
      
     def run_rb_expectimax(self):            
-        if self.is_done() or gge.is_final_state(self.state) or self.depth == 0:
-            return self.actionToThisState, self.heuristic(self.state, self.agent_id) #TO DO - check if to return this or the action from last iteration
+        if self.is_done():
+           raise Exception("timeout")
+        if gge.is_final_state(self.state) or self.depth == 0:
+            return (self.actionToThisState, self.heuristic(self.state, self.agent_id) + self.depth) # + self.depth to make sure that the agent will choose the shortest path to win
         
-        neighbor_list = self.state.get_neighbors() #list of (action, next_state) #also handle the turn
+        neighbor_list = self.state.get_neighbors()
         if self.state.turn == self.agent_id:
-            curr_max = -math.inf            
+            curr_max = -math.inf
+            action_max = None            
             for neighbor in neighbor_list:
                 actionToNextState = neighbor[0]
                 next_state = neighbor[1]
                 action, curr_heuristic = RB_Expectimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
-                                                              self.depth - 1, actionToNextState, self.heuristic).run_rb_expectimax()
-                if action != None and not gge.is_legal_step(action, self.state):
-                    continue
-                
+                                                        self.depth - 1, actionToNextState, self.heuristic).run_rb_expectimax()
                 if self.is_done():
-                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                    raise Exception("timeout")
 
                 if curr_heuristic > curr_max:
                     curr_max = curr_heuristic                        
-                    self.best_action = action
-                    self.best_value = curr_max
-                
-            return self.best_action, self.best_value
+                    action_max = actionToNextState                
+            return action_max, curr_max
         else:#turn != self.state.turn
-            heuristics = []
-            probabilities = []
+            specialCases = []
             for neighbor in neighbor_list:
+                next_state = neighbor[1]
+                specialCases.append(self.probabilityOfState(self.state, next_state, self.agent_id))
+            sumSpecialCases = 0
+            for case in specialCases:
+                sumSpecialCases += case #sumOfProbabilities is at least in the length of neighbor_list                            
+            
+            sum = 0
+            curr_min = math.inf
+            action_min = None
+            for i, neighbor in enumerate(neighbor_list):
                 actionToNextState = neighbor[0]
                 next_state = neighbor[1]
                 action, curr_heuristic = RB_Expectimax(next_state, self.agent_id, self.timeout - (time.time() - self.start_time), 
                                                             self.depth - 1, actionToNextState, self.heuristic).run_rb_expectimax()
-                if action != None and not gge.is_legal_step(action, self.state):
-                    continue
-                
                 if self.is_done():
-                    return self.best_action, self.best_value #TO DO - check if to return this or the action from last iteration
+                    raise Exception("timeout")
                 
-                heuristics.append(curr_heuristic)
-                probabilities.append(self.probabilityOfState(self.state, next_state, self.agent_id))
-            
-            #after we have all the utilities and probabilities
-            sumOfProbabilities = 0
-            for probability in probabilities:
-                sumOfProbabilities += probability #sumOfProbabilities is at least in the length of neighbor_list                            
-            value = 0
-            for probability, curr_heuristic in zip(probabilities, heuristics):
-                value += probability/sumOfProbabilities * curr_heuristic
-            
-            self.best_action = self.actionToThisState
-            self.best_value = value           
-            return self.best_action, self.best_value
-        
+                curr_heuristic = (specialCases[i]/sumSpecialCases) * curr_heuristic    
+                if curr_heuristic < curr_min:
+                    curr_min = curr_heuristic                        
+                    action_min = actionToNextState
+                    
+                sum += curr_heuristic
+            return action_min, sum #doesn't matter what action we return here
+                              
     def checkTime(self):
         end_time = time.time()
-        if(end_time - self.start_time + 0.2 > self.timeout): #-0.2 to make sure we don't go over the time limit
+        duration = end_time - self.start_time
+        if(duration + 0.2 > self.timeout):
             self.is_done_flag = True
-        self.timeout -= (end_time - self.start_time)
-        if(self.timeout < end_time - self.start_time):
+        self.timeout -= duration
+        if(self.timeout < duration):
             self.is_done_flag = True
         
     def is_done(self):
         self.checkTime()
         return self.is_done_flag
-    
-    def get_best_action(self):
-        return self.best_action
     
     def probabilityOfState(self, curr_state, next_state, agent_id):    
         probability = 1
@@ -698,17 +709,3 @@ class RB_Expectimax:
         return 0 #no pawn is on pawn 
 ############################################################################################################
 
-def expectimax(curr_state, agent_id, time_limit):
-    rb_expectimax = RB_Expectimax(curr_state, agent_id, time_limit, 0, None)
-    while not rb_expectimax.is_done():
-        rb_expectimax.run_rb_expectimax()
-        print(rb_expectimax.best_action, rb_expectimax.best_value)
-        print(rb_expectimax.depth)
-        rb_expectimax.depth += 1
-        
-    return rb_expectimax.get_best_action()
-
-# these is the BONUS - not mandatory
-def super_agent(curr_state, agent_id, time_limit):
-    action = alpha_beta_minimax(curr_state, agent_id, time_limit, -math.inf, math.inf)
-    return action
