@@ -315,7 +315,6 @@ def createMatrixOfPotentialBlocks(matrixOpponent):
     return matrixOfBlocks
 
 def evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer, matrixOfPotentialBlocks):
-    #matrixOfPotentialBlocks = createMatrixOfPotentialBlocks(matrixOpponent)
                     
     availableOpponentPawns = getAvailablePawnsToBlock(matrixOfPotentialBlocks, matrixOpponent)
     maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)#in order to know if he would be able to put a pawn on maxAavailablePawn
@@ -467,7 +466,7 @@ def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_i
     heuristic = 0
     
     heuristic += valuesState[agent_id]["potentialBlocks"]
-    #צheuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
+    #heuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
     
     heuristic += valuesState[agent_id]["potentialWins"]
     #heuristic -= valuesState[opponent_agent_id]["potentialWins"]    
