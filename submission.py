@@ -97,8 +97,6 @@ def greedy_improved(curr_state, agent_id, time_limit):
     for neighbor in neighbor_list:
         next_state = neighbor[1]
         curr_heuristic = smart_heuristic(next_state, agent_id)
-        # print("pawn: {}, location: {}, heuristic: {}, next location:{}".format(neighbor[0][0], neighbor[0][1], curr_heuristic, gge.find_curr_location(neighbor[1], neighbor[0][0], agent_id)))
-        # print("###")
         if curr_heuristic >= max_heuristic:
             max_heuristic = curr_heuristic
             max_neighbor = neighbor
@@ -113,14 +111,10 @@ def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = No
     while not rb_minimax.is_done():
         try:
             action, value = rb_minimax.run_rb_minimax()
-            print("action: {}, value: {}".format(action, value))
             max_action = action
-            print("max_action: {}".format(max_action))
-            print("depth: {}".format(rb_minimax.depth))
             rb_minimax.depth += 1
         except Exception as e:
             rb_minimax.is_done_flag = True
-    print("#####max_action: {}".format(max_action))        
     return max_action
     
 def rb_heuristic_min_max(curr_state, agent_id, time_limit):
@@ -203,17 +197,13 @@ def definitelyWin(matrix):
 
 #potential win - winning after the opponent makes a move
 def evaluatePotentialWins(state, agent_id, matrixCurrPlayer, matrixOpponent, matrixOfPotentialBlocksOpponent):
-    #matrixOfPotentialBlocks = createMatrixOfPotentialBlocks(matrixCurrPlayer)
     
     availablePawns = getAvailablePawnsToBlock(matrixOfPotentialBlocksOpponent, matrixCurrPlayer)
     maxAvailablePawn = getMaxPawn(availablePawns)#in order to know if he would be able to put a pawn on maxAavailablePawn
 
     availableOpponentPawns = getAvailablePawns(state, agent_id)#getAvailablePawnsToBlock(matrixOfPotentialBlocksOpponent, matrixOpponent)
     maxAvailableOpponentPawnForBlocking = getMaxPawn(availableOpponentPawns)
-    
-    # print("availablePawns: ", availablePawns)
-    # print("aviailableOpponentPawns: ", availableOpponentPawns)
-    
+        
     matrixOfPotentialWins = createMatrixOfPotentialWins(matrixCurrPlayer)
     return evaluateRemainingSpots(matrixOpponent, matrixOfPotentialWins, maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
 
@@ -289,13 +279,11 @@ def checkSecondaryDiagonalForWin(matrixCurrPlayer):
         return -1, -1
     
 def evaluateRemainingSpots(matrixOpponent, matrixOfWins, maxAvailablePawn, maxAvailableOpponentPawnForBlocking):
-    #print("win")
     value = 0
     for i in range(3):
         for j in range(3):          
             if matrixOfWins[i][j] == 1 and (matrixOpponent[i][j] == " " or gge.size_cmp(maxAvailablePawn, matrixOpponent[i][j])):
                 value += evaluateSpot(maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
-    #print("end win")
     return value    
 
 def createMatrixOfPotentialBlocks(matrixOpponent):
@@ -410,7 +398,6 @@ def getMaxPawn(pawns):
     return maxPawn    
   
 def evaluateSpot(currPawn, maxAvailableOpponentPawn):
-    #print("BLOCK: currPawn: " + currPawn + ", maxAvailableOpponentPawn: " + maxAvailableOpponentPawn)
     value = 0
     isBigger = gge.size_cmp(currPawn, maxAvailableOpponentPawn)
     if(isBigger == 1):#availableMaxPawn is bigger than availableMaxPawnOpponent - can block the opponent, must put the max pawn
@@ -419,19 +406,15 @@ def evaluateSpot(currPawn, maxAvailableOpponentPawn):
         value = 100
     else:
         value = 10
-    # print("value: {}".format(value))
-    # print("###")
     return value
   
 #check if the remaining spot is empty or if it is smaller than the max pawn of the current player    
 def evaluateBlocks(matrixCurrPlayer, matrixOfBlocks, maxAvailableOpponentPawnForBlocking):
     value = 0
-    #print("block")
     for i in range(3):
         for j in range(3):          
             if matrixCurrPlayer[i][j] != " " and matrixOfBlocks[i][j] == 1:
                 value += evaluateSpot(matrixCurrPlayer[i][j], maxAvailableOpponentPawnForBlocking)                    
-    #print("end evaluateBlocks")
     return value  
     
 #remove pawns that are on the same row/col/diagonal that brings to win
@@ -514,12 +497,7 @@ def smart_heuristic(state, agent_id):
         matrixOpponent = stateToMatrix(state, opponent_agent_id)
         matrixOfPotentialBlocks = createMatrixOfPotentialBlocks(matrixOpponent)
         matrixOfPotentialBlocksOpponent = createMatrixOfPotentialBlocks(matrixCurrPlayer)
-
-        # printMatrix(matrixCurrPlayer)
-        # printMatrix(matrixOpponent)
-        # printMatrix(matrixOfPotentialBlocks)
-        # printMatrix(matrixOfPotentialBlocksOpponent)
-        
+                
         values = {}
         values[agent_id] = {"potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
         values[opponent_agent_id] = {"potentialBlocks": 0, "potentialWins": 0, "exposedPawns": 0}
@@ -527,14 +505,10 @@ def smart_heuristic(state, agent_id):
         values[agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer, matrixOfPotentialBlocks)
         values[agent_id]["potentialWins"] = evaluatePotentialWins(state, agent_id, matrixCurrPlayer, matrixOpponent, matrixOfPotentialBlocksOpponent)#in 2 steps
         values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)
-        #print("\n")
         values[opponent_agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent, matrixOfPotentialBlocksOpponent)
         values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(state, opponent_agent_id, matrixOpponent, matrixCurrPlayer, matrixOfPotentialBlocks)#in 2 steps
         values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
         
-        # print(values[agent_id])
-        # print(values[opponent_agent_id])
-
         return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
 
 ##########################################class RBMinimax###################################################
@@ -727,4 +701,3 @@ class RB_Expectimax:
                                 
         return 0 #no pawn is on pawn 
 ############################################################################################################
-
