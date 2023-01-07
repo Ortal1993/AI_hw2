@@ -107,13 +107,12 @@ def greedy_improved(curr_state, agent_id, time_limit):
 
 def alpha_beta_minimax(curr_state, agent_id, time_limit, alpha = None, beta = None):
     rb_minimax = RBMinimax(curr_state, agent_id, time_limit, 0, None, alpha, beta)
-    max_action, max_value = None, -math.inf
-    action, value = None, -math.inf
+    max_action = None
+    action = None
     while not rb_minimax.is_done():
         try:
             action, value = rb_minimax.run_rb_minimax()
             max_action = action
-            max_value = value
             rb_minimax.depth += 1
         except Exception as e:
             rb_minimax.is_done_flag = True        
@@ -129,13 +128,12 @@ def alpha_beta(curr_state, agent_id, time_limit):
 
 def expectimax(curr_state, agent_id, time_limit):
     rb_expectimax = RB_Expectimax(curr_state, agent_id, time_limit, 0, None)
-    max_action, max_value = None, -math.inf
-    action, value = None, -math.inf
+    max_action = None
+    action = None
     while not rb_expectimax.is_done():
         try:
             action, value = rb_expectimax.run_rb_expectimax()
             max_action = action
-            max_value = value
             rb_expectimax.depth += 1 
         except Exception:
             rb_expectimax.is_done_flag = True
@@ -287,7 +285,7 @@ def evaluateRemainingSpots(matrixOpponent, matrixOfWins, maxAvailablePawn, maxAv
     for i in range(3):
         for j in range(3):          
             if matrixOfWins[i][j] == 1 and (matrixOpponent[i][j] == " " or gge.size_cmp(maxAvailablePawn, matrixOpponent[i][j])):
-                value += evaluateSpot(maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
+                value += evaluateSpotForWin(maxAvailablePawn, maxAvailableOpponentPawnForBlocking)
     return value    
 
 def createMatrixOfPotentialBlocks(matrixOpponent):
@@ -401,6 +399,18 @@ def getMaxPawn(pawns):
         maxPawn = 'S'
     return maxPawn    
   
+def evaluateSpotForWin(currPawn, maxAvailableOpponentPawn):
+    value = 0
+    if currPawn == maxAvailableOpponentPawn:#availableMaxPawn is equal to availableMaxPawnOpponent - can block the opponent, must put the max pawn
+        value = 50
+    elif currPawn == "S": #availableMaxPawnOpponent is "M" or "B" - can't block the opponent but worth the try
+        value = 10
+    elif currPawn == "B": #availableMaxPawnOpponent is "M" - can block the opponent
+        value = 100
+    elif maxAvailableOpponentPawn == "S": #availableMaxPawn is "M" - can block the opponent
+        value = 100
+    return value  
+  
 def evaluateSpot(currPawn, maxAvailableOpponentPawn):
     value = 0
     if currPawn == maxAvailableOpponentPawn:#availableMaxPawn is equal to availableMaxPawnOpponent - can block the opponent, must put the max pawn
@@ -473,10 +483,10 @@ def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_i
     heuristic = 0
     
     heuristic += valuesState[agent_id]["potentialBlocks"]
-    heuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
+    #heuristic -= valuesState[opponent_agent_id]["potentialBlocks"]
     
     heuristic += valuesState[agent_id]["potentialWins"]
-    heuristic -= valuesState[opponent_agent_id]["potentialWins"]    
+    #heuristic -= valuesState[opponent_agent_id]["potentialWins"]    
     
     heuristic += valuesState[agent_id]["exposedPawns"] #need to consider the kind of pawn?
     heuristic -= valuesState[opponent_agent_id]["exposedPawns"] #need to consider the kind of pawn?
@@ -493,7 +503,7 @@ def calculateHeuristic(valuesState, agent_id, matrixCurrPlayer, opponent_agent_i
 def smart_heuristic(state, agent_id):
     winner = gge.is_final_state(state)
     if winner == 0:
-        return 0
+        return -100
     elif winner != None and int(winner) - 1 == agent_id:
         return 1000
     elif  winner != None and int(winner) - 1 != agent_id:
@@ -510,9 +520,9 @@ def smart_heuristic(state, agent_id):
 
         values[agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixOpponent, matrixCurrPlayer)
         values[agent_id]["potentialWins"] = evaluatePotentialWins(matrixCurrPlayer, matrixOpponent)#in 2 steps
-        values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id)   
-        values[opponent_agent_id]["potentialBlocks"] = evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent)
-        values[opponent_agent_id]["potentialWins"] = evaluatePotentialWins(matrixOpponent, matrixCurrPlayer)#in 2 steps
+        values[agent_id]["exposedPawns"] = dumb_heuristic2(state, agent_id) - dumb_heuristic2(state, opponent_agent_id)
+        values[opponent_agent_id]["potentialBlocks"] = 0#evaluatePotentialBlocks(matrixCurrPlayer, matrixOpponent)
+        values[opponent_agent_id]["potentialWins"] = 0#evaluatePotentialWins(matrixOpponent, matrixCurrPlayer)#in 2 steps
         values[opponent_agent_id]["exposedPawns"] = dumb_heuristic2(state, opponent_agent_id)
 
         return calculateHeuristic(values, agent_id, matrixCurrPlayer, opponent_agent_id)
@@ -587,8 +597,8 @@ class RBMinimax:
         if(duration + 0.2 > self.timeout):
             self.is_done_flag = True
         self.timeout -= duration
-        if(self.timeout < duration):
-            self.is_done_flag = True
+        # if(self.timeout < duration):
+        #     self.is_done_flag = True
         
     def is_done(self):
         self.checkTime()
@@ -664,8 +674,8 @@ class RB_Expectimax:
         if(duration + 0.2 > self.timeout):
             self.is_done_flag = True
         self.timeout -= duration
-        if(self.timeout < duration):
-            self.is_done_flag = True
+        # if(self.timeout < duration):
+        #     self.is_done_flag = True
         
     def is_done(self):
         self.checkTime()
